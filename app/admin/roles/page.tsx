@@ -31,7 +31,7 @@ export default function AdminRolesPage() {
 
     const load = () => {
         setLoading(true);
-        fetch("/api/flask/admin/api/roles").then(r => r.json()).then(d => setRoles(d.roles || [])).finally(() => setLoading(false));
+        fetch("/api/flask/admin/api/roles", { credentials: "include" }).then(r => r.json()).then(d => setRoles(d.roles || [])).finally(() => setLoading(false));
     };
     useEffect(load, []);
 
@@ -58,14 +58,14 @@ export default function AdminRolesPage() {
     async function save() {
         const url = editing ? `/api/flask/admin/api/roles/${editing.id}` : "/api/flask/admin/api/roles";
         const method = editing ? "PUT" : "POST";
-        await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
+        await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(form), credentials: "include" });
         setShowModal(false);
         load();
     }
 
     async function handleDelete(id: number) {
         if (!confirm("هل أنت متأكد من حذف هذا الدور؟")) return;
-        await fetch(`/api/flask/admin/api/roles/${id}`, { method: "DELETE" });
+        await fetch(`/api/flask/admin/api/roles/${id}`, { method: "DELETE", credentials: "include" });
         load();
     }
 

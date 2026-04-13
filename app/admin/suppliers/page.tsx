@@ -17,7 +17,7 @@ export default function AdminSuppliersPage() {
 
     const load = () => {
         setLoading(true);
-        fetch("/api/flask/admin/api/suppliers").then(r => r.json())
+        fetch("/api/flask/admin/api/suppliers", { credentials: "include" }).then(r => r.json())
             .then(d => setSuppliers(d.suppliers || []))
             .finally(() => setLoading(false));
     };
@@ -37,21 +37,21 @@ export default function AdminSuppliersPage() {
     async function handleSave() {
         const url = editing ? `/api/flask/admin/api/suppliers/${editing.id}` : "/api/flask/admin/api/suppliers";
         const method = editing ? "PUT" : "POST";
-        await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
+        await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(form), credentials: "include" });
         setShowModal(false);
         load();
     }
 
     async function handleDelete(id: number) {
         if (!confirm("هل أنت متأكد من حذف هذا المورد؟")) return;
-        await fetch(`/api/flask/admin/api/suppliers/${id}`, { method: "DELETE" });
+        await fetch(`/api/flask/admin/api/suppliers/${id}`, { method: "DELETE", credentials: "include" });
         load();
     }
 
     async function rateSupplier(id: number, field: string, value: number) {
         await fetch(`/api/flask/admin/api/suppliers/${id}/rate`, {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ [field]: value }),
+            body: JSON.stringify({ [field]: value }), credentials: "include",
         });
         load();
     }

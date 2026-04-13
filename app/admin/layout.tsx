@@ -1,9 +1,29 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, memo } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { authenticatedGet, authenticatedPost, logout, getCsrfToken, clearCsrfToken } from "@/lib/admin-auth";
+import dynamic from "next/dynamic";
 import "./admin.css";
+
+// ─── Dynamic Import of AddProductModal with ssr: false ─────────────────────────
+const AddProductModal = dynamic(() => import("@/components/admin/AddProductModal"), {
+  ssr: false,
+  loading: () => null,
+});
+
+// ─── Isolated Clock Component (prevents full layout re-render) ─────────────────
+const AdminClock = memo(function AdminClock() {
+  const [time, setTime] = useState("");
+  useEffect(() => {
+    const tick = () => setTime(new Date().toLocaleTimeString("ar-EG", { hour: "numeric", minute: "numeric", second: "numeric", hour12: true }));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+  return <span className="admin-clock" suppressHydrationWarning>{time}</span>;
+});
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface FlashMessage {
@@ -20,172 +40,17 @@ interface Notification {
   cod_amount: number;
 }
 
-interface AddProductModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  categories: { id: number; name: string }[];
-}
-
-// ─── Add Product Modal ─────────────────────────────────────────────────────────
-function AddProductModal({ isOpen, onClose, categories }: AddProductModalProps) {
-  const [mainImagePreview, setMainImagePreview] = useState<string | null>(null);
-  const [additionalPreviews, setAdditionalPreviews] = useState<string[]>([]);
-
-  function handleMainImage(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => setMainImagePreview(ev.target?.result as string);
-    reader.readAsDataURL(file);
-  }
-
-  function handleAdditionalImages(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []);
-    const readers = files.map(
-      (file) =>
-        new Promise<string>((resolve) => {
-          const r = new FileReader();
-          r.onload = (ev) => resolve(ev.target?.result as string);
-          r.readAsDataURL(file);
-        })
-    );
-    Promise.all(readers).then(setAdditionalPreviews);
-  }
-
-  const [submitting, setSubmitting] = useState(false);
-  const [submitMsg, setSubmitMsg] = useState<{ ok: boolean; text: string } | null>(null);
-
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setSubmitting(true);
-    setSubmitMsg(null);
-    try {
-      const formData = new FormData(e.currentTarget);
-      const res = await fetch("/api/flask/admin/add_product", { method: "POST", body: formData });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.success !== false) {
-        setSubmitMsg({ ok: true, text: data.message || "تمت إضافة المنتج بنجاح!" });
-        setTimeout(() => { onClose(); window.location.reload(); }, 800);
-      } else {
-        setSubmitMsg({ ok: false, text: data.message || "حدث خطأ أثناء الإضافة" });
-      }
-    } catch {
-      setSubmitMsg({ ok: false, text: "حدث خطأ في الاتصال" });
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="admin-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="admin-modal">
-        <div className="admin-modal-header">
-          <h2><i className="bx bx-package" /> إضافة منتج جديد</h2>
-          <button className="admin-modal-close" onClick={onClose}>&times;</button>
-        </div>
-
-        <div className="admin-modal-body">
-          {submitMsg && (
-            <div style={{ padding: "10px 14px", borderRadius: 8, marginBottom: 12, fontSize: "0.9rem", background: submitMsg.ok ? "#ecfdf5" : "#fef2f2", color: submitMsg.ok ? "#065f46" : "#991b1b", border: `1px solid ${submitMsg.ok ? "#a7f3d0" : "#fecaca"}` }}>
-              <i className={`bx ${submitMsg.ok ? "bx-check-circle" : "bx-error-circle"}`} /> {submitMsg.text}
-            </div>
-          )}
-          <form onSubmit={handleSubmit}>
-            <div className="mb-3">
-              <label className="admin-form-label">اسم المنتج <span className="text-danger">*</span></label>
-              <input type="text" name="name" required className="admin-form-control" placeholder="أدخل اسم المنتج" />
-            </div>
-
-            <div className="row g-3 mb-3">
-              <div className="col-6">
-                <label className="admin-form-label">السعر (ج.م) <span className="text-danger">*</span></label>
-                <input type="number" step="0.01" name="price" required className="admin-form-control" placeholder="0.00" />
-              </div>
-              <div className="col-6">
-                <label className="admin-form-label">الكمية <span className="text-danger">*</span></label>
-                <input type="number" name="quantity" required className="admin-form-control" placeholder="0" />
-              </div>
-            </div>
-
-            <div className="row g-3 mb-3">
-              <div className="col-6">
-                <label className="admin-form-label">التصنيف <span className="text-danger">*</span></label>
-                <select name="category" required className="admin-form-control">
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>{cat.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-6">
-                <label className="admin-form-label">نسبة الخصم (%)</label>
-                <input type="number" name="discount" min="0" max="100" className="admin-form-control" placeholder="0" />
-              </div>
-            </div>
-
-            {/* Main Image */}
-            <div className="mb-3">
-              <label className="admin-form-label">الصورة الرئيسية <span className="text-danger">*</span></label>
-              <div className="admin-dropzone">
-                <input type="file" name="image" required className="d-none" id="mainImg" accept="image/*" onChange={handleMainImage} />
-                <label htmlFor="mainImg" className="d-flex flex-column align-items-center gap-1 cursor-pointer" style={{ cursor: "pointer" }}>
-                  <i className="bx bx-cloud-upload" style={{ fontSize: 28, color: "var(--alha-primary, #0071ce)" }} />
-                  <span style={{ fontSize: "0.85rem", color: "var(--alha-text-secondary)" }}>انقر لرفع الصورة</span>
-                </label>
-                {mainImagePreview && <img src={mainImagePreview} alt="preview" className="mt-2 rounded" style={{ maxHeight: 100, maxWidth: "100%" }} />}
-              </div>
-            </div>
-
-            {/* Additional Images */}
-            <div className="mb-3">
-              <label className="admin-form-label">صور إضافية</label>
-              <div className="admin-dropzone">
-                <input type="file" name="additional_images" multiple className="d-none" id="addImgs" accept="image/*" onChange={handleAdditionalImages} />
-                <label htmlFor="addImgs" className="d-flex flex-column align-items-center gap-1" style={{ cursor: "pointer" }}>
-                  <i className="bx bx-images" style={{ fontSize: 28, color: "var(--alha-primary, #0071ce)" }} />
-                  <span style={{ fontSize: "0.85rem", color: "var(--alha-text-secondary)" }}>انقر لرفع أكثر من صورة</span>
-                </label>
-                {additionalPreviews.length > 0 && (
-                  <div className="d-flex flex-wrap gap-2 mt-2 justify-content-center">
-                    {additionalPreviews.map((src, i) => (
-                      <img key={i} src={src} alt="preview" className="rounded" style={{ width: 72, height: 72, objectFit: "cover" }} />
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="mb-4">
-              <label className="admin-form-label">وصف المنتج</label>
-              <textarea name="description" rows={3} className="admin-form-control" placeholder="أدخل وصف المنتج..." />
-            </div>
-
-            <div className="d-flex justify-content-end gap-2">
-              <button type="button" onClick={onClose} className="btn-outline-alha">إلغاء</button>
-              <button type="submit" className="btn-cta-alha d-flex align-items-center gap-2" disabled={submitting}>
-                {submitting ? <><span className="spinner-border spinner-border-sm" /> جاري الحفظ...</> : <><i className="bx bx-save" /> حفظ المنتج</>}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Admin Layout ──────────────────────────────────────────────────────────────
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [productModalOpen, setProductModalOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [time, setTime] = useState("");
   const [flashMessages, setFlashMessages] = useState<FlashMessage[]>([]);
-  const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
   const [reportStartDate, setReportStartDate] = useState("");
   const [reportEndDate, setReportEndDate] = useState("");
   const [isBackingUp, setIsBackingUp] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   function addFlash(category: FlashMessage["category"], message: string) {
     const id = Date.now() + Math.floor(Math.random() * 1000);
@@ -201,7 +66,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   async function handleBackup() {
     setIsBackingUp(true);
     try {
-      const r = await fetch("/api/flask/admin/backup_project", { method: "POST", credentials: "include" });
+      const r = await authenticatedPost("/api/flask/admin/backup_project", {});
       addFlash(r.ok ? "success" : "error", r.ok ? "تم النسخ الاحتياطي بنجاح" : "تعذر تنفيذ النسخ الاحتياطي");
     } catch {
       addFlash("error", "فشل الاتصال بالخادم");
@@ -210,20 +75,85 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
   }
 
+  // Set mounted state on client-side only
   useEffect(() => {
-    fetch("/api/flask/admin/api/categories").then((r) => r.json()).then(setCategories).catch(() => { });
+    setMounted(true);
   }, []);
 
+  // Listen for custom event to open Add Product modal from child pages
   useEffect(() => {
-    const tick = () => setTime(new Date().toLocaleTimeString("ar-EG", { hour: "numeric", minute: "numeric", second: "numeric", hour12: true }));
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
+    const handleOpenAddProductModal = () => {
+      setProductModalOpen(true);
+    };
+
+    window.addEventListener('open-add-product-modal', handleOpenAddProductModal);
+
+    return () => {
+      window.removeEventListener('open-add-product-modal', handleOpenAddProductModal);
+    };
   }, []);
+
+  // ─── Global fetch interceptor: auto-add credentials + CSRF token for admin API ──
+  useEffect(() => {
+    const originalFetch = window.fetch;
+    window.fetch = async function patchedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+      const url = typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
+      if (url.includes('/api/flask/admin/')) {
+        init = { ...init, credentials: 'include' };
+        const method = (init.method || 'GET').toUpperCase();
+        if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+          const csrfToken = await getCsrfToken();
+          if (csrfToken) {
+            const headers = new Headers(init.headers);
+            if (!headers.has('X-CSRF-Token')) {
+              headers.set('X-CSRF-Token', csrfToken);
+            }
+            init.headers = headers;
+          }
+        }
+      }
+      return originalFetch.call(window, input, init);
+    };
+    return () => { window.fetch = originalFetch; };
+  }, []);
+
+  // Authentication check - verify session with server, not just localStorage
+  useEffect(() => {
+    if (!mounted) return;
+
+    const isLoggedIn = localStorage.getItem('admin_logged_in') === 'true';
+
+    if (!isLoggedIn && pathname !== '/admin/login') {
+      window.location.href = '/admin/login';
+      return;
+    }
+
+    // Verify with server that the session cookie is still valid
+    if (isLoggedIn && pathname !== '/admin/login') {
+      authenticatedGet('/api/flask/admin/api/latest_orders')
+        .then(r => {
+          if (r.status === 401) {
+            localStorage.removeItem('admin_logged_in');
+            window.location.href = '/admin/login';
+          }
+        })
+        .catch(() => { });
+    }
+  }, [mounted, pathname]);
+
+  // Helper function to extract a cookie value by name
+  function getCookieValue(cookies: string, name: string): string | null {
+    const value = `; ${cookies}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) {
+      return parts.pop()?.split(';').shift() || null;
+    }
+    return null;
+  }
 
   useEffect(() => {
     if (!notifOpen) return;
-    fetch("/api/flask/admin/api/latest_orders").then((r) => r.json()).then((d) => setNotifications(Array.isArray(d) ? d : [])).catch(() => { });
+    authenticatedGet("/api/flask/admin/api/latest_orders").then((r) => r.json()).then((d) => setNotifications(Array.isArray(d) ? d : [])).catch(() => { });
   }, [notifOpen]);
 
   function isActive(href: string) {
@@ -248,7 +178,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: "/admin/homepage-sections", icon: "bx-layout", label: "الصفحة الرئيسية" },
     { href: "/admin/bundles", icon: "bx-box", label: "الباقات" },
     { href: "/admin/showcase", icon: "bx-collection", label: "المجموعات" },
-    { href: "/admin/blog", icon: "bx-news", label: "المدونة" },
+    {
+      href: "/admin/blog", icon: "bx-news", label: "المدونة"
+
+    },
     { href: "/admin/newsletter", icon: "bx-envelope", label: "النشرة البريدية" },
     { href: "/admin/seo", icon: "bx-search-alt-2", label: "SEO" },
     { href: "/admin/roles", icon: "bx-shield-quarter", label: "الأدوار" },
@@ -271,7 +204,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       {/* ── Flash Messages ─────────────────────────── */}
       <div className="admin-flash">
-        {flashMessages.map((msg) => (
+        {(Array.isArray(flashMessages) ? flashMessages : []).map((msg) => (
           <div key={msg.id} className={`admin-flash-item ${msg.category}`}>
             <div className="d-flex align-items-center gap-2">
               <i className={`bx ${flashIcons[msg.category]}`} />
@@ -290,20 +223,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="d-flex align-items-center gap-3">
           <Link href="/shop" target="_blank"><i className="bx bx-store" /> عرض المتجر</Link>
           <span className="d-none d-md-inline" style={{ opacity: 0.4 }}>|</span>
-          <Link href="/api/flask/admin/logout" className="d-none d-md-inline"><i className="bx bx-log-out" /> تسجيل الخروج</Link>
+          <button onClick={logout} className="d-none d-md-inline" style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'inherit' }}><i className="bx bx-log-out" /> تسجيل الخروج</button>
         </div>
         <div className="d-flex align-items-center gap-3">
-          <span className="d-none d-sm-inline">لوحة تحكم الحامد</span>
-          <span className="admin-clock" suppressHydrationWarning>{time}</span>
+          <span className="d-none d-sm-inline">لوحة تحكم الحمد</span>
+          <AdminClock />
         </div>
       </div>
 
       {/* ── Main Header ────────────────────────────── */}
       <header className="admin-main-header">
         <Link href="/admin/dashboard" className="admin-brand">
-          <img src="/static/images/logo-alha.jpeg" alt="الحامد" />
+          <img src="/static/images/logo-alha.jpeg" alt="الحمد" />
           <div>
-            <div className="admin-brand-title">الحامد — لوحة التحكم</div>
+            <div className="admin-brand-title">الحمد — لوحة التحكم</div>
             <div className="admin-brand-sub">إدارة المتجر الإلكتروني</div>
           </div>
         </Link>
@@ -323,7 +256,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     <div className="p-4 text-center" style={{ color: "var(--alha-text-muted)" }}>
                       <i className="bx bx-inbox" style={{ fontSize: 28 }} /><br /><span style={{ fontSize: "0.8rem" }}>لا توجد إشعارات</span>
                     </div>
-                  ) : notifications.map((n) => (
+                  ) : (Array.isArray(notifications) ? notifications : []).map((n) => (
                     <div key={n.id} className="notif-item">
                       <div className="notif-name">{n.name}</div>
                       <div className="notif-msg">{n.message}</div>
@@ -351,7 +284,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* ── Sub Navigation Bar ─────────────────────── */}
       <nav className="admin-sub-nav">
         <div className="admin-sub-nav-inner">
-          {navLinks.map((link) => (
+          {(Array.isArray(navLinks) ? navLinks : []).map((link) => (
             <Link key={link.href} href={link.href} className={`admin-nav-link ${isActive(link.href) ? "active" : ""}`}>
               <i className={`bx ${link.icon}`} />{link.label}
             </Link>
@@ -381,13 +314,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       {/* ── Footer ─────────────────────────────────── */}
       <footer className="admin-footer">
-        الحامد — لوحة التحكم &copy; 2026 |{" "}
+        الحمد — لوحة التحكم &copy; 2026 |{" "}
         <a href="/shop" target="_blank">عرض المتجر</a>
       </footer>
 
       {/* ── Mobile Bottom Nav ──────────────────────── */}
       <nav className="admin-mobile-nav">
-        {mobileLinks.map((link) => (
+        {(Array.isArray(mobileLinks) ? mobileLinks : []).map((link) => (
           <Link key={link.href} href={link.href} className={`admin-mobile-nav-link ${isActive(link.href) ? "active" : ""}`}>
             <i className={`bx ${link.icon}`} style={{ fontSize: "1.3rem" }} />
             {link.label}
@@ -399,7 +332,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </nav>
 
       {/* ── Add Product Modal ──────────────────────── */}
-      <AddProductModal isOpen={productModalOpen} onClose={() => setProductModalOpen(false)} categories={categories} />
+      {/* Modal is dynamically imported with ssr: false, preventing hydration mismatch */}
+      <AddProductModal isOpen={productModalOpen} onClose={() => setProductModalOpen(false)} />
     </div>
   );
 }

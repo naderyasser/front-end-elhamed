@@ -15,16 +15,16 @@ export default function AdminSEOPage() {
     useEffect(() => {
         setLoading(true);
         if (tab === "meta") {
-            fetch("/api/flask/admin/api/seo/products-missing-meta").then(r => r.json()).then(d => setProducts(d.products || [])).finally(() => setLoading(false));
+            fetch("/api/flask/admin/api/seo/products-missing-meta", { credentials: "include" }).then(r => r.json()).then(d => setProducts(d.products || [])).finally(() => setLoading(false));
         } else {
-            fetch("/api/flask/admin/api/seo/redirects").then(r => r.json()).then(d => setRedirects(d.redirects || [])).finally(() => setLoading(false));
+            fetch("/api/flask/admin/api/seo/redirects", { credentials: "include" }).then(r => r.json()).then(d => setRedirects(d.redirects || [])).finally(() => setLoading(false));
         }
     }, [tab]);
 
     async function saveMeta(pid: number, meta_title: string, meta_description: string) {
         await fetch("/api/flask/admin/api/seo/update-meta", {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ product_id: pid, meta_title, meta_description }),
+            body: JSON.stringify({ product_id: pid, meta_title, meta_description }), credentials: "include",
         });
         setProducts(prev => prev.filter(p => p.id !== pid));
     }
@@ -32,7 +32,7 @@ export default function AdminSEOPage() {
     async function saveRedirect() {
         await fetch("/api/flask/admin/api/seo/redirects", {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(rdForm),
+            body: JSON.stringify(rdForm), credentials: "include",
         });
         setShowRedirectModal(false);
         setRdForm({ source_path: "", target_path: "" });
@@ -40,7 +40,7 @@ export default function AdminSEOPage() {
     }
 
     async function deleteRedirect(id: number) {
-        await fetch(`/api/flask/admin/api/seo/redirects/${id}`, { method: "DELETE" });
+        await fetch(`/api/flask/admin/api/seo/redirects/${id}`, { method: "DELETE", credentials: "include" });
         setRedirects(prev => prev.filter(r => r.id !== id));
     }
 

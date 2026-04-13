@@ -8,8 +8,13 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const plusJakarta = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-jakarta" });
 
 export const metadata: Metadata = {
-  title: "Alhamed Platform",
-  description: "World-class ecommerce and service dashboard",
+  title: "متجر الحمد",
+  description: "متجر الحمد للاجهزة الكهربائية - شحن سريع لجميع أنحاء مصر",
+  icons: {
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+    apple: "/static/images/main-logo.png",
+  },
 };
 
 export default function RootLayout({
@@ -18,7 +23,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="ar" suppressHydrationWarning>
       <body className={`${inter.variable} ${plusJakarta.variable} antialiased`}>
         <AppProviders>
           <a href="#main-content" className="skip-link">

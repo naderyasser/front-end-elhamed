@@ -3,25 +3,27 @@ const nextConfig = {
     images: {
         remotePatterns: [
             { protocol: "http", hostname: "localhost" },
-            { protocol: "https", hostname: "**" },
+            { protocol: "http", hostname: "127.0.0.1" },
+            { protocol: "https", hostname: "alhamdshob.com" },
+            { protocol: "https", hostname: "*.alhamdshob.com" },
         ],
     },
     async rewrites() {
         return [
             {
                 source: "/api/flask/:path*",
-                destination: "http://localhost:1911/:path*",
+                destination: `${process.env.BACKEND_URL || "http://127.0.0.1:1911"}/:path*`,
             },
         ];
     },
     async headers() {
         return [
             {
-                // HTML pages: never cache so stale action IDs never persist after a rebuild
+                // HTML pages: short-lived cache — stale is fine for a few seconds,
+                // but browsers must revalidate to pick up live changes.
                 source: "/((?!_next/static|_next/image|favicon.ico).*)",
                 headers: [
-                    { key: "Cache-Control", value: "no-store, must-revalidate" },
-                    { key: "Pragma",        value: "no-cache" },
+                    { key: "Cache-Control", value: "public, max-age=0, must-revalidate" },
                 ],
             },
             {

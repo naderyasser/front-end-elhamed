@@ -17,24 +17,24 @@ export default function AdminBundlesPage() {
   const [addOpen, setAddOpen] = useState(false);
 
   useEffect(() => {
-    fetch("/api/flask/admin/api/bundles").then((r) => r.json()).then((d) => { setBundles(d?.bundles ?? []); setProducts(d?.products ?? []); }).catch(() => { });
+    fetch("/api/flask/admin/api/bundles", { credentials: "include" }).then((r) => r.json()).then((d) => { setBundles(d?.bundles ?? []); setProducts(d?.products ?? []); }).catch(() => { });
   }, []);
 
   async function handleToggle(id: number) {
-    await fetch(`/api/flask/admin/bundles/${id}/toggle`, { method: "POST" });
+    await fetch(`/api/flask/admin/bundles/${id}/toggle`, { method: "POST", credentials: "include" });
     setBundles((prev) => prev.map((b) => b.id === id ? { ...b, is_active: !b.is_active } : b));
   }
 
   async function handleDelete(id: number) {
     if (!confirm("حذف هذه الباقة؟")) return;
-    await fetch(`/api/flask/admin/bundles/${id}`, { method: "DELETE" });
+    await fetch(`/api/flask/admin/bundles/${id}`, { method: "DELETE", credentials: "include" });
     setBundles((prev) => prev.filter((b) => b.id !== id));
   }
 
   async function handleAdd(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    await fetch("/api/flask/admin/bundles/add", { method: "POST", body: fd });
+    await fetch("/api/flask/admin/bundles/add", { method: "POST", body: fd, credentials: "include" });
     setAddOpen(false); router.refresh();
   }
 

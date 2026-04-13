@@ -1,8 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { flaskServerJson } from "@/lib/flask-server";
 import { formatMoneyEGP, formatStoreImage } from "@/lib/store-utils";
 import ProductDetailClient, { ShareButton, NotifyButton } from "./product-detail-client";
+import { AddToCartForm } from "./add-to-cart-form";
+import { BuyNowButton } from "./buy-now-button";
+import { WishlistButton } from "./wishlist-button";
 
 type ProductDetailsPageProps = {
     params: {
@@ -11,6 +15,29 @@ type ProductDetailsPageProps = {
 };
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({ params }: ProductDetailsPageProps): Promise<Metadata> {
+    const productId = Number(params.id);
+    if (Number.isNaN(productId)) return {};
+    try {
+        const product = await flaskServerJson<ProductDetailsResponse>(`/api/shop/products/${productId}`);
+        if (!product) return {};
+        const image = formatStoreImage(product.images?.[0]);
+        const absoluteImage = image.startsWith('/') ? `https://alhamdshob.com${image}` : image;
+        return {
+            title: product.meta_title || `${product.name} | الحمد`,
+            description: product.meta_description || product.description?.slice(0, 160) || `اشتري ${product.name} بسعر ${Math.round(product.final_price).toLocaleString('ar-EG')} ج.م`,
+            openGraph: {
+                title: product.meta_title || product.name,
+                description: product.meta_description || product.description?.slice(0, 160),
+                images: [{ url: absoluteImage, alt: product.name }],
+                type: 'website',
+            },
+        };
+    } catch {
+        return {};
+    }
+}
 
 type ProductDetailsResponse = {
     id: number;
@@ -48,9 +75,35 @@ export default async function ProductDetailsPage({ params }: ProductDetailsPageP
     const stars = Math.max(0, Math.min(5, Math.round(product.rating || 0)));
     const images = (product.images || []).map((img) => formatStoreImage(img));
     const mainImage = images[0] || formatStoreImage("");
+    const absoluteMainImage = mainImage.startsWith('/') ? `https://alhamdshob.com${mainImage}` : mainImage;
+
+    const jsonLd = {
+        "@context": "https://schema.org",
+        "@type": "Product",
+        name: product.name,
+        description: product.description,
+        image: absoluteMainImage,
+        brand: { "@type": "Brand", name: product.brand || "الحمد" },
+        offers: {
+            "@type": "Offer",
+            priceCurrency: "EGP",
+            price: finalPrice,
+            availability: product.in_stock
+                ? "https://schema.org/InStock"
+                : "https://schema.org/OutOfStock",
+            url: `https://alhamdshob.com/shop/products/${product.id}`,
+        },
+        aggregateRating: product.reviews > 0
+            ? { "@type": "AggregateRating", ratingValue: product.rating, reviewCount: product.reviews }
+            : undefined,
+    };
 
     return (
         <section className="shop-page-shell" dir="rtl">
+            <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+            />
             <div className="container">
                 <div className="row g-4">
                     {/* === Image Gallery === */}
@@ -115,22 +168,12 @@ export default async function ProductDetailsPage({ params }: ProductDetailsPageP
                             </div>
 
                             {/* Add to cart */}
-                            <form className="d-flex align-items-center gap-2 mt-4 mb-3" action={`/api/flask/cart/add/${product.id}`} method="post">
-                                <label htmlFor="qty" className="fw-semibold">الكمية:</label>
-                                <input id="qty" type="number" min={1} max={Math.max(product.stock || 1, 1)} defaultValue={1} name="quantity" className="form-control" style={{ width: 90 }} />
-                                <button type="submit" className="btn btn-warning" style={{ fontWeight: 700 }} disabled={!product.in_stock}>
-                                    <i className="bx bx-cart-add" /> أضف إلى السلة
-                                </button>
-                            </form>
+                            <AddToCartForm productId={product.id} inStock={product.in_stock} />
 
                             {/* Action buttons */}
                             <div className="d-flex gap-2 flex-wrap mt-2">
-                                <Link href="/shop/checkout" className="btn btn-primary">
-                                    <i className="bx bx-bolt-circle" /> شراء الآن
-                                </Link>
-                                <Link href="/shop/wishlist" className="btn btn-outline-secondary">
-                                    <i className="bx bx-heart" /> للمفضلة
-                                </Link>
+                                <BuyNowButton productId={product.id} productName={product.name} inStock={product.in_stock} />
+                                <WishlistButton productId={product.id} />
                                 <ShareButton productName={product.name} />
                             </div>
 
@@ -151,10 +194,7 @@ export default async function ProductDetailsPage({ params }: ProductDetailsPageP
                                         {product.in_stock ? "متوفر" : "غير متوفر"}
                                     </span>
                                 </div>
-                                <div className="small mb-0">
-                                    <strong>سياسة الاسترجاع:</strong>{" "}
-                                    <Link href="/shop/return-policy" className="text-decoration-none">عرض التفاصيل</Link>
-                                </div>
+
                             </div>
                         </div>
                     </div>

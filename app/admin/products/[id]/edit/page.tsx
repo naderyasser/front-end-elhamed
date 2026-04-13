@@ -31,8 +31,8 @@ export default function EditProductPage() {
   useEffect(() => {
     fetch(`/api/flask/admin/api/products/${productId}`)
       .then((r) => r.json())
-      .then((d) => { setProduct(d.product); setCategories(d.categories ?? []); setSeoData(d.seo_data ?? {}); })
-      .catch(() => {});
+      .then((d) => { setProduct(d.product); setCategories(d.categories ?? d.flat ?? []); setSeoData(d.seo_data ?? {}); })
+      .catch(() => { });
   }, [productId]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -51,26 +51,26 @@ export default function EditProductPage() {
   return (
     <div className="min-h-screen px-6 py-6" style={{ background: "#000" }}>
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-sm text-gray-500 mb-6">
-        <Link href="/admin/dashboard" className="hover:text-gray-800 transition-colors">لوحة التحكم</Link>
+      <div className="flex items-center gap-2 text-sm text-gray-400 mb-6">
+        <Link href="/admin/dashboard" className="hover:text-white transition-colors">لوحة التحكم</Link>
         <i className="bx bx-chevron-left" />
-        <Link href="/admin/products" className="hover:text-gray-800 transition-colors">المنتجات</Link>
+        <Link href="/admin/products" className="hover:text-white transition-colors">المنتجات</Link>
         <i className="bx bx-chevron-left" />
-        <span className="text-gray-800">تعديل: {product.name}</span>
+        <span className="text-gray-200">تعديل: {product.name}</span>
       </div>
 
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-gray-800 text-2xl shadow-lg" style={{ background: "linear-gradient(135deg, #f97316, #ea580c)" }}>
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-white text-2xl shadow-lg" style={{ background: "linear-gradient(135deg, #f97316, #ea580c)" }}>
             <i className="bx bx-edit" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">تعديل المنتج</h1>
-            <p className="text-gray-500 text-sm mt-0.5">{product.name}</p>
+            <h1 className="text-2xl font-bold text-white">تعديل المنتج</h1>
+            <p className="text-gray-400 text-sm mt-0.5">{product.name}</p>
           </div>
         </div>
-        <Link href="/admin/products" className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 bg-white border border-[#cfd8dc] text-gray-300 hover:border-[#0071ce]">
+        <Link href="/admin/products" className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 bg-white border border-[#cfd8dc] text-gray-700 hover:border-[#0071ce]">
           <i className="bx bx-arrow-back" /> رجوع للمنتجات
         </Link>
       </div>
@@ -82,34 +82,41 @@ export default function EditProductPage() {
             {/* Left Column */}
             <div className="space-y-6">
               <div>
-                <label className="block text-sm font-semibold mb-2 text-gray-300">اسم المنتج <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-semibold mb-2 text-gray-700">اسم المنتج <span className="text-red-500">*</span></label>
                 <input type="text" name="name" defaultValue={product.name} required className={inputCls} />
               </div>
               <div>
-                <label className="block text-sm font-semibold mb-2 text-gray-300">التصنيف <span className="text-red-500">*</span></label>
-                <select name="category" required className={inputCls}>
+                <label className="block text-sm font-semibold mb-2 text-gray-700">التصنيف <span className="text-red-500">*</span></label>
+                {/* key=category_id forces re-render once async data loads so defaultValue takes effect */}
+                <select
+                  key={product.category_id}
+                  name="category_id"
+                  required
+                  defaultValue={String(product.category_id)}
+                  className={inputCls}
+                >
                   <option value="">اختر التصنيف</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id} selected={c.id === product.category_id}>{c.name}</option>
+                  {(Array.isArray(categories) ? categories : []).map((c) => (
+                    <option key={c.id} value={String(c.id)}>{c.name}</option>
                   ))}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-semibold mb-2 text-gray-300">السعر قبل الخصم <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-semibold mb-2 text-gray-700">السعر قبل الخصم <span className="text-red-500">*</span></label>
                   <input type="number" step="0.01" name="price" defaultValue={product.price} required className={inputCls} />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold mb-2 text-gray-300">الخصم (%)</label>
+                  <label className="block text-sm font-semibold mb-2 text-gray-700">الخصم (%)</label>
                   <input type="number" name="discount" defaultValue={product.discount} min="0" max="100" className={inputCls} />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-semibold mb-2 text-gray-300">الكمية في المخزون <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-semibold mb-2 text-gray-700">الكمية في المخزون <span className="text-red-500">*</span></label>
                 <input type="number" name="quantity" defaultValue={product.stock} required min="0" className={inputCls} />
               </div>
               <div>
-                <label className="block text-sm font-semibold mb-2 text-gray-300">وصف المنتج</label>
+                <label className="block text-sm font-semibold mb-2 text-gray-700">وصف المنتج</label>
                 <textarea name="description" rows={5} defaultValue={product.description} className={inputCls + " resize-none"} />
               </div>
 
@@ -141,7 +148,7 @@ export default function EditProductPage() {
             <div className="space-y-6">
               {/* Current Image */}
               <div>
-                <label className="block text-sm font-semibold mb-3 text-gray-300">الصورة الحالية</label>
+                <label className="block text-sm font-semibold mb-3 text-gray-700">الصورة الحالية</label>
                 <div className="rounded-2xl overflow-hidden" style={{ background: "#f8f9fa", border: "1px solid #cfd8dc" }}>
                   <img src={imagePreview ?? `/api/flask/${product.image}`} alt={product.name} className="w-full h-64 object-contain p-4" />
                 </div>
@@ -149,7 +156,7 @@ export default function EditProductPage() {
 
               {/* Upload New */}
               <div>
-                <label className="block text-sm font-semibold mb-3 text-gray-300">تغيير الصورة الرئيسية</label>
+                <label className="block text-sm font-semibold mb-3 text-gray-700">تغيير الصورة الرئيسية</label>
                 <div className="border-2 border-dashed rounded-2xl p-6 text-center transition-colors hover:border-[#0071ce]" style={{ borderColor: "#333" }}>
                   <input type="file" name="image" accept="image/*" id="imageInput" className="hidden"
                     onChange={(e) => {
@@ -166,7 +173,7 @@ export default function EditProductPage() {
 
               {/* Variants Link */}
               <div className="rounded-2xl p-5" style={{ background: "#f8f9fa", border: "1px solid #cfd8dc" }}>
-                <h3 className="font-semibold text-gray-200 mb-4 flex items-center gap-2">
+                <h3 className="font-semibold text-gray-700 mb-4 flex items-center gap-2">
                   <i className="bx bx-git-branch text-[#0071ce]" /> إدارة المتغيرات
                 </h3>
                 <Link href={`/admin/products/${product.id}/variants`} className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl transition-all duration-200 font-medium" style={{ background: "rgba(211,47,47,0.1)", color: "#0071ce", border: "1px solid rgba(211,47,47,0.2)" }}>
@@ -178,7 +185,7 @@ export default function EditProductPage() {
 
           {/* Submit */}
           <div className="flex justify-end gap-4 mt-10 pt-6" style={{ borderTop: "1px solid #222" }}>
-            <Link href="/admin/products" className="px-8 py-3 rounded-xl font-semibold transition-all duration-200 bg-white border border-[#cfd8dc] text-gray-300 hover:border-[#0071ce]">
+            <Link href="/admin/products" className="px-8 py-3 rounded-xl font-semibold transition-all duration-200 bg-white border border-[#cfd8dc] text-gray-700 hover:border-[#0071ce]">
               إلغاء
             </Link>
             <button type="submit" disabled={saving} className="btn-accent px-8 py-3 rounded-xl font-semibold flex items-center gap-2 disabled:opacity-60">

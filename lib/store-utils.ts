@@ -32,5 +32,5 @@ export function formatStoreImage(imagePath?: string | null): string {
 }
 
 export function formatMoneyEGP(value: number): string {
-    return `${Math.round(value)} ج.م`;
+    return Math.round(value).toLocaleString("ar-EG") + " ج.م";
 }

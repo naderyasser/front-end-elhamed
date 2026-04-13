@@ -20,16 +20,16 @@ export default function AdminShippingPage() {
   const [activeTab, setActiveTab] = useState<number | null>(null);
 
   useEffect(() => {
-    fetch("/api/flask/admin/api/shipping")
+    fetch("/api/flask/admin/api/shipping", { credentials: "include" })
       .then((r) => r.json())
       .then((d) => { setCities(d.cities ?? []); setStats(d.stats ?? {}); if (d.cities?.length) setActiveTab(d.cities[0].id); })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   async function handleAddCity(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    await fetch("/api/flask/admin/shipping/cities/add", { method: "POST", body: fd });
+    await fetch("/api/flask/admin/shipping/cities/add", { method: "POST", body: fd, credentials: "include" });
     setAddCityOpen(false); router.refresh();
   }
 
@@ -37,19 +37,19 @@ export default function AdminShippingPage() {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     fd.append("city_id", String(cityId));
-    await fetch("/api/flask/admin/shipping/zones/add", { method: "POST", body: fd });
+    await fetch("/api/flask/admin/shipping/zones/add", { method: "POST", body: fd, credentials: "include" });
     setAddZoneOpen(null); router.refresh();
   }
 
   async function handleDeleteCity(id: number) {
     if (!confirm("حذف هذه المدينة وجميع مناطقها؟")) return;
-    await fetch(`/api/flask/admin/shipping/cities/${id}`, { method: "DELETE" });
+    await fetch(`/api/flask/admin/shipping/cities/${id}`, { method: "DELETE", credentials: "include" });
     setCities((prev) => prev.filter((c) => c.id !== id));
   }
 
   async function handleDeleteZone(id: number) {
     if (!confirm("حذف هذه المنطقة؟")) return;
-    await fetch(`/api/flask/admin/shipping/zones/${id}`, { method: "DELETE" });
+    await fetch(`/api/flask/admin/shipping/zones/${id}`, { method: "DELETE", credentials: "include" });
     router.refresh();
   }
 

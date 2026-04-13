@@ -2,22 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { formatMoneyEGP } from "@/lib/store-utils";
-
-type CartItem = {
-    id: number;
-    quantity: number;
-    line_total: number;
-    product: {
-        name: string;
-    };
-};
-
-type CartResponse = {
-    items: CartItem[];
-    subtotal: number;
-    total: number;
-};
+import { useCart } from "@/contexts/CartContext";
 
 type City = {
     id: number;
@@ -40,28 +27,66 @@ type ZonesResponse = {
 };
 
 export default function CheckoutPageClient() {
-    const [cart, setCart] = useState<CartResponse | null>(null);
+    const router = useRouter();
+    const { cart, isMounted, refreshCart } = useCart();
     const [cities, setCities] = useState<City[]>([]);
     const [zones, setZones] = useState<Zone[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [selectedCity, setSelectedCity] = useState("");
     const [selectedZone, setSelectedZone] = useState("");
+    const [submitting, setSubmitting] = useState(false);
+    const [submitError, setSubmitError] = useState("");
+
+    async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        setSubmitError("");
+        setSubmitting(true);
+        try {
+            const formData = new FormData(event.currentTarget);
+            const res = await fetch("/api/flask/checkout/place_order", {
+                method: "POST",
+                body: formData,
+                credentials: "include",
+                redirect: "follow",
+            });
+            // Flask redirects on success to /order_confirmation?order_id=...
+            // Extract order id from the final URL if available.
+            if (res.ok || res.redirected) {
+                const finalUrl = res.url || "";
+                const match = finalUrl.match(/order_id=(\d+)/);
+                await refreshCart();
+                if (match) {
+                    router.push(`/shop/order-confirmation?order_id=${match[1]}`);
+                } else {
+                    router.push("/shop/orders");
+                }
+                router.refresh();
+                return;
+            }
+            setSubmitError("تعذر إتمام الطلب، الرجاء المحاولة مرة أخرى");
+        } catch {
+            setSubmitError("حدث خطأ في الاتصال بالخادم");
+        } finally {
+            setSubmitting(false);
+        }
+    }
 
     useEffect(() => {
         async function loadData() {
             setLoading(true);
             setError("");
             try {
-                const [cartResponse, citiesResponse] = await Promise.all([
-                    fetch("/api/flask/api/frontend/cart", { cache: "no-store" }),
-                    fetch("/api/flask/api/cities", { cache: "no-store" }),
-                ]);
-                const cartData = await cartResponse.json();
+                const citiesResponse = await fetch("/api/flask/api/cities", { cache: "no-store" });
+                if (!citiesResponse.ok) {
+                    throw new Error(`Cities fetch failed: ${citiesResponse.status}`);
+                }
                 const citiesData: CitiesResponse = await citiesResponse.json();
 
-                setCart(cartData);
                 setCities(citiesData.city || []);
+                
+                // Refresh cart from API to get latest data
+                await refreshCart();
             } catch {
                 setError("تعذر تحميل بيانات الدفع حاليا");
             } finally {
@@ -69,11 +94,13 @@ export default function CheckoutPageClient() {
             }
         }
 
-        loadData();
-    }, []);
+        if (isMounted) {
+            loadData();
+        }
+    }, [isMounted, refreshCart]);
 
     useEffect(() => {
-        async function loadZones() {
+        async function loadZones(signal: AbortSignal) {
             if (!selectedCity) {
                 setZones([]);
                 setSelectedZone("");
@@ -81,18 +108,24 @@ export default function CheckoutPageClient() {
             }
 
             try {
-                const response = await fetch(`/api/flask/api/zones?city_id=${encodeURIComponent(selectedCity)}`, { cache: "no-store" });
+                const response = await fetch(`/api/flask/api/zones?city_id=${encodeURIComponent(selectedCity)}`, { cache: "no-store", signal });
+                if (!response.ok) {
+                    throw new Error(`Zones fetch failed: ${response.status}`);
+                }
                 const data: ZonesResponse = await response.json();
                 const zoneItems = data.zones || [];
                 setZones(zoneItems);
                 setSelectedZone(zoneItems[0]?.zone_id || selectedCity);
-            } catch {
+            } catch (err) {
+                if ((err as Error).name === 'AbortError') return;
                 setZones([]);
                 setSelectedZone(selectedCity);
             }
         }
 
-        loadZones();
+        const controller = new AbortController();
+        loadZones(controller.signal);
+        return () => controller.abort();
     }, [selectedCity]);
 
     const selectedCityName = useMemo(() => {
@@ -133,7 +166,12 @@ export default function CheckoutPageClient() {
                     <h1 className="mb-3" style={{ fontWeight: 800 }}>
                         إتمام الطلب
                     </h1>
-                    <form className="row g-3" action="/api/flask/checkout/place_order" method="post">
+                    {submitError && (
+                        <div className="alert alert-danger" role="alert">
+                            {submitError}
+                        </div>
+                    )}
+                    <form className="row g-3" onSubmit={handleSubmit}>
                         <input type="hidden" name="total" value={String(cart.total)} />
                         <input type="hidden" name="city_name" value={selectedCityName} />
 
@@ -201,8 +239,8 @@ export default function CheckoutPageClient() {
                             </div>
                         </div>
                         <div className="col-12 d-flex gap-2">
-                            <button type="submit" className="btn btn-primary">
-                                تأكيد الطلب
+                            <button type="submit" className="btn btn-primary" disabled={submitting}>
+                                {submitting ? "جاري التأكيد..." : "تأكيد الطلب"}
                             </button>
                             <Link href="/shop/cart" className="btn btn-outline-secondary">
                                 العودة للسلة
@@ -221,7 +259,7 @@ export default function CheckoutPageClient() {
                                 <span>
                                     {item.product.name} × {item.quantity}
                                 </span>
-                                <strong>{formatMoneyEGP(item.line_total)}</strong>
+                                <strong>{formatMoneyEGP(item.line_total || 0)}</strong>
                             </div>
                         ))}
                     </div>

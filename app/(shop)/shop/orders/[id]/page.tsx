@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { formatMoneyEGP } from "@/lib/store-utils";
 
 interface OrderItem {
     id: number;
@@ -154,8 +155,8 @@ export default function ShopOrderDetailsPage() {
                                             </div>
                                         </td>
                                         <td className="text-center">{item.quantity}</td>
-                                        <td className="text-center">{item.price.toFixed(2)} ج.م</td>
-                                        <td className="text-center">{item.total.toFixed(2)} ج.م</td>
+                                        <td className="text-center">{formatMoneyEGP(item.price)}</td>
+                                        <td className="text-center">{formatMoneyEGP(item.total)}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -164,12 +165,12 @@ export default function ShopOrderDetailsPage() {
 
                     {/* Totals */}
                     <div className="d-flex flex-column align-items-end gap-1 mb-3" style={{ fontSize: "0.95rem" }}>
-                        <span>المجموع الفرعي: <strong>{subtotal.toFixed(2)} ج.م</strong></span>
+                        <span>المجموع الفرعي: <strong>{formatMoneyEGP(subtotal)}</strong></span>
                         {order.shipping_cost > 0 && (
-                            <span>الشحن: <strong>{order.shipping_cost.toFixed(2)} ج.م</strong></span>
+                            <span>الشحن: <strong>{formatMoneyEGP(order.shipping_cost)}</strong></span>
                         )}
                         <span style={{ fontSize: "1.15rem" }}>
-                            الإجمالي: <strong style={{ color: "var(--alha-primary, #0071ce)" }}>{order.total.toFixed(2)} ج.م</strong>
+                            الإجمالي: <strong style={{ color: "var(--alha-primary, #0071ce)" }}>{formatMoneyEGP(order.total)}</strong>
                         </span>
                     </div>
 

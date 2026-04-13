@@ -17,12 +17,14 @@ import {
     Title,
     Tooltip,
     Legend,
+    Filler,
     type ChartData,
     type ChartOptions,
 } from "chart.js";
 import { Line, Bar } from "react-chartjs-2";
 
 // Synchronous registration — no race condition
+// Filler is required for the 'fill' option in line charts
 ChartJS.register(
     CategoryScale,
     LinearScale,
@@ -31,7 +33,8 @@ ChartJS.register(
     BarElement,
     Title,
     Tooltip,
-    Legend
+    Legend,
+    Filler
 );
 
 interface AdminChartsProps {

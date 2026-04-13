@@ -69,7 +69,7 @@ function TreeNode({ cat, depth, onEdit, onDelete, dragId, onDragStart, onDragOve
 
         {/* Icon / Image */}
         {cat.image ? (
-          <img src={`/api/flask/${cat.image}`} alt="" className="tree-thumb" />
+          <img src={`/api/flask/${cat.image}`} alt={cat.name} className="tree-thumb" />
         ) : (
           <span className="tree-icon-box"><i className={`bx ${cat.icon || "bx-category"}`} /></span>
         )}
@@ -124,10 +124,21 @@ export default function AdminCategoriesPage() {
   const formRef = useRef<HTMLFormElement>(null);
   const [selectedAttrs, setSelectedAttrs] = useState<number[]>([]);
   const [seoOpen, setSeoOpen] = useState(false);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const fetchData = useCallback(() => {
     setLoading(true);
-    fetch("/api/flask/admin/api/categories")
+    // Check if admin is logged in using session cookie auth
+    const isLoggedIn = typeof window !== 'undefined' && localStorage.getItem('admin_logged_in') === 'true';
+    if (!isLoggedIn) {
+      console.error("Admin not logged in");
+      window.location.href = '/admin/login';
+      setLoading(false);
+      return;
+    }
+    fetch("/api/flask/admin/api/categories", {
+      credentials: 'include', // CRITICAL: Send HTTP-only session cookies
+    })
       .then(r => { if (!r.ok) throw new Error(""); return r.json(); })
       .then(d => {
         setTree(d?.tree ?? []);
@@ -161,9 +172,23 @@ export default function AdminCategoriesPage() {
     if (!dragged || !target) { setDragId(null); return; }
     const targetDepth = depthOf(target, catMap);
     if (targetDepth >= 2) { setDragId(null); return; }
+
+    // Check if admin is logged in using session cookie auth
+    const isLoggedIn = typeof window !== 'undefined' && localStorage.getItem('admin_logged_in') === 'true';
+    if (!isLoggedIn) {
+      console.error("Admin not logged in");
+      window.location.href = '/admin/login';
+      setDragId(null);
+      return;
+    }
+
     const updates = [{ id: dragId, order: 0, parent_id: targetId }];
     fetch("/api/flask/admin/reorder_categories", {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST",
+      credentials: 'include', // CRITICAL: Send HTTP-only session cookies
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify(updates),
     }).then(() => fetchData());
     setDragId(null);
@@ -175,6 +200,7 @@ export default function AdminCategoriesPage() {
     setModal("add");
     setSelectedAttrs([]);
     setSeoOpen(false);
+    setImagePreview(null);
     setTimeout(() => {
       if (formRef.current && parentId) {
         const el = formRef.current.querySelector('[name="parent_id"]') as HTMLSelectElement;
@@ -187,31 +213,94 @@ export default function AdminCategoriesPage() {
     setModal("edit");
     setSelectedAttrs((cat.attributes ?? []).map(a => a.id));
     setSeoOpen(false);
+    setImagePreview(null);
   }
+  const [submitting, setSubmitting] = useState(false);
+  const [submitMsg, setSubmitMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
   async function handleDelete(cat: Category) {
     if ((cat.children ?? []).length > 0) return alert("لا يمكن حذف تصنيف يحتوي على أقسام فرعية");
     if ((cat.products ?? []).length > 0) return alert("لا يمكن حذف تصنيف يحتوي على منتجات");
     if (!confirm(`هل أنت متأكد من حذف "${cat.name}"؟`)) return;
-    await fetch(`/api/flask/admin/categories/${cat.id}`, { method: "DELETE" });
-    fetchData();
+
+    try {
+      const res = await fetch(`/api/flask/admin/categories/${cat.id}`, {
+        method: "DELETE",
+        credentials: 'include', // CRITICAL: Send HTTP-only session cookies
+      });
+      if (!res.ok) {
+        if (res.status === 401) {
+          window.location.href = '/admin/login';
+          return;
+        }
+        throw new Error('فشل الحذف');
+      }
+      fetchData();
+    } catch (error) {
+      alert('حدث خطأ أثناء حذف التصنيف');
+    }
   }
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+
+    // Check if admin is logged in using session cookie auth
+    const isLoggedIn = typeof window !== 'undefined' && localStorage.getItem('admin_logged_in') === 'true';
+    if (!isLoggedIn) {
+      alert('يرجى تسجيل الدخول أولاً');
+      window.location.href = '/admin/login';
+      return;
+    }
+
+    setSubmitting(true);
+    setSubmitMsg(null);
+
     const fd = new FormData(e.currentTarget);
     selectedAttrs.forEach(id => fd.append("attribute_ids", String(id)));
+
     // Handle checkbox — send "on" if checked, remove if not
     const activeCheckbox = e.currentTarget.querySelector('[name="is_active"]') as HTMLInputElement;
     if (activeCheckbox && !activeCheckbox.checked) {
       fd.set("is_active", "");
     }
-    if (modal === "edit" && editCat) {
-      await fetch(`/api/flask/admin/categories/${editCat.id}/edit`, { method: "POST", body: fd });
-    } else {
-      await fetch("/api/flask/admin/categories/add", { method: "POST", body: fd });
+
+    try {
+      let res;
+
+      if (modal === "edit" && editCat) {
+        res = await fetch(`/api/flask/admin/categories/${editCat.id}/edit`, {
+          method: "POST",
+          body: fd,
+          credentials: 'include', // CRITICAL: Send HTTP-only session cookies
+        });
+      } else {
+        res = await fetch("/api/flask/admin/categories/add", {
+          method: "POST",
+          body: fd,
+          credentials: 'include', // CRITICAL: Send HTTP-only session cookies
+        });
+      }
+
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data.success !== false) {
+        setSubmitMsg({ ok: true, text: data.message || (modal === "edit" ? "تم تعديل التصنيف بنجاح" : "تم إضافة التصنيف بنجاح") });
+        setTimeout(() => {
+          setModal(null);
+          setEditCat(null);
+          fetchData();
+        }, 800);
+      } else {
+        setSubmitMsg({ ok: false, text: data.message || "حدث خطأ أثناء الحفظ" });
+        if (res.status === 401) {
+          setTimeout(() => window.location.href = '/admin/login', 1500);
+        }
+      }
+    } catch (error) {
+      setSubmitMsg({ ok: false, text: "حدث خطأ في الاتصال" });
+    } finally {
+      setSubmitting(false);
     }
-    setModal(null);
-    setEditCat(null);
-    fetchData();
   }
 
   function toggleAttr(id: number) {
@@ -321,6 +410,24 @@ export default function AdminCategoriesPage() {
             </div>
 
             <form ref={formRef} onSubmit={handleSubmit} encType="multipart/form-data" className="p-6 space-y-5">
+              {/* Submit Message */}
+              {submitMsg && (
+                <div style={{
+                  padding: "12px 16px",
+                  borderRadius: 12,
+                  marginBottom: 16,
+                  fontSize: "0.9rem",
+                  background: submitMsg.ok ? "#ecfdf5" : "#fef2f2",
+                  color: submitMsg.ok ? "#065f46" : "#991b1b",
+                  border: `1px solid ${submitMsg.ok ? "#a7f3d0" : "#fecaca"}`,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px"
+                }}>
+                  <i className={`bx ${submitMsg.ok ? "bx-check-circle" : "bx-error-circle"}`} style={{ fontSize: "1.2rem" }} />
+                  <span>{submitMsg.text}</span>
+                </div>
+              )}
               {/* Basic info */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -367,8 +474,35 @@ export default function AdminCategoriesPage() {
                 {/* Image */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">الصورة</label>
-                  <input type="file" name="image" accept="image/*" className="w-full text-gray-500 text-sm" />
-                  {editCat?.image && <p className="text-xs text-gray-400 mt-1">الحالية: {editCat.image.split("/").pop()}</p>}
+                  {/* Preview: show newly-selected image first, then existing, then nothing */}
+                  {(imagePreview || editCat?.image) && (
+                    <div className="mb-2 rounded-xl overflow-hidden border border-[#e8edf2]" style={{ height: 120 }}>
+                      <img
+                        src={imagePreview ?? `/api/flask/${editCat!.image}`}
+                        alt="معاينة الصورة"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    name="image"
+                    accept="image/*"
+                    className="w-full text-gray-500 text-sm file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-[#0071ce] file:text-white hover:file:bg-[#005baa] cursor-pointer"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => setImagePreview(ev.target?.result as string);
+                        reader.readAsDataURL(f);
+                      } else {
+                        setImagePreview(null);
+                      }
+                    }}
+                  />
+                  {!imagePreview && editCat?.image && (
+                    <p className="text-xs text-gray-400 mt-1">الحالية: {editCat.image.split("/").pop()}</p>
+                  )}
                 </div>
                 {/* Display order + Active */}
                 <div className="flex gap-4 items-end">
@@ -396,8 +530,8 @@ export default function AdminCategoriesPage() {
                     return (
                       <button key={attr.id} type="button" onClick={() => toggleAttr(attr.id)}
                         className={`px-4 py-2 rounded-lg text-sm font-medium transition-all border ${selected
-                            ? "bg-[#0071ce] text-white border-[#0071ce] shadow-sm"
-                            : "bg-white text-gray-600 border-[#cfd8dc] hover:border-[#0071ce]"
+                          ? "bg-[#0071ce] text-white border-[#0071ce] shadow-sm"
+                          : "bg-white text-gray-600 border-[#cfd8dc] hover:border-[#0071ce]"
                           }`}>
                         <i className={`bx ${attr.attr_type === "color" ? "bx-palette" : attr.attr_type === "size" ? "bx-ruler" : "bx-text"} mr-1`} />
                         {attr.name}
@@ -437,11 +571,20 @@ export default function AdminCategoriesPage() {
               {/* Submit */}
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => { setModal(null); setEditCat(null); }}
-                  className="flex-1 py-3 px-4 rounded-xl font-medium bg-white border border-[#cfd8dc] text-gray-600 hover:bg-gray-50">
+                  className="flex-1 py-3 px-4 rounded-xl font-medium bg-white border border-[#cfd8dc] text-gray-600 hover:bg-gray-50"
+                  disabled={submitting}>
                   إلغاء
                 </button>
-                <button type="submit" className="flex-1 btn-accent py-3 px-4 rounded-xl font-medium">
-                  {modal === "edit" ? "حفظ التعديلات" : "إضافة التصنيف"}
+                <button type="submit" className="flex-1 btn-accent py-3 px-4 rounded-xl font-medium flex items-center justify-center gap-2"
+                  disabled={submitting}>
+                  {submitting ? (
+                    <>
+                      <i className="bx bx-loader-alt bx-spin" />
+                      <span>جاري الحفظ...</span>
+                    </>
+                  ) : (
+                    <span>{modal === "edit" ? "حفظ التعديلات" : "إضافة التصنيف"}</span>
+                  )}
                 </button>
               </div>
             </form>

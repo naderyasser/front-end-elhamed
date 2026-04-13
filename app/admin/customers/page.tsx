@@ -27,7 +27,7 @@ export default function AdminCustomersPage() {
         const params = new URLSearchParams({ page: String(page), per_page: "20" });
         if (search) params.set("search", search);
         if (tierFilter) params.set("tier", tierFilter);
-        fetch(`/api/flask/admin/api/customers?${params}`)
+        fetch(`/api/flask/admin/api/customers?${params}`, { credentials: "include" })
             .then(r => r.json())
             .then(d => { setCustomers(d.customers || []); setTotal(d.total || 0); })
             .finally(() => setLoading(false));
@@ -36,7 +36,7 @@ export default function AdminCustomersPage() {
     async function updateTier(uid: number, tier: string) {
         await fetch(`/api/flask/admin/api/customers/${uid}/tier`, {
             method: "PUT", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ tier }),
+            body: JSON.stringify({ tier }), credentials: "include",
         });
         setCustomers(prev => prev.map(c => c.id === uid ? { ...c, customer_tier: tier } : c));
     }

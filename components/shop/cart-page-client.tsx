@@ -3,87 +3,38 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { formatMoneyEGP, formatStoreImage } from "@/lib/store-utils";
-
-type CartItem = {
-    id: number;
-    quantity: number;
-    max_quantity: number;
-    line_total: number;
-    unit_price: number;
-    product: {
-        id: number;
-        name: string;
-        image: string;
-    };
-};
-
-type CartResponse = {
-    items: CartItem[];
-    items_count: number;
-    subtotal: number;
-    total: number;
-};
+import { useCart, type CartItem } from "@/contexts/CartContext";
 
 export default function CartPageClient() {
-    const [cart, setCart] = useState<CartResponse | null>(null);
-    const [loading, setLoading] = useState(true);
+    const { cart, isMounted, updateQuantity, removeFromCart, refreshCart } = useCart();
     const [pendingId, setPendingId] = useState<number | null>(null);
     const [error, setError] = useState<string>("");
 
-    async function loadCart() {
-        setLoading(true);
-        setError("");
-        try {
-            const response = await fetch("/api/flask/api/frontend/cart", { cache: "no-store" });
-            const data = await response.json();
-            setCart(data);
-        } catch {
-            setError("تعذر تحميل السلة حاليا");
-        } finally {
-            setLoading(false);
-        }
-    }
-
+    // Refresh cart from API on mount to get latest data
     useEffect(() => {
-        loadCart();
-    }, []);
+        if (isMounted) {
+            refreshCart();
+        }
+    }, [isMounted, refreshCart]);
 
-    async function updateQuantity(itemId: number, quantity: number) {
+    async function handleUpdateQuantity(itemId: number, quantity: number) {
         setPendingId(itemId);
         setError("");
         try {
-            const response = await fetch(`/api/flask/api/frontend/cart/update/${itemId}`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ quantity }),
-            });
-            const data = await response.json();
-            if (!response.ok || !data?.success) {
-                setError(data?.message || "فشل تحديث الكمية");
-                return;
-            }
-            setCart(data);
-        } catch {
+            await updateQuantity(itemId, quantity);
+        } catch (err) {
             setError("فشل تحديث الكمية");
         } finally {
             setPendingId(null);
         }
     }
 
-    async function removeItem(itemId: number) {
+    async function handleRemoveItem(itemId: number) {
         setPendingId(itemId);
         setError("");
         try {
-            const response = await fetch(`/api/flask/api/frontend/cart/remove/${itemId}`, {
-                method: "POST",
-            });
-            const data = await response.json();
-            if (!response.ok || !data?.success) {
-                setError(data?.message || "فشل حذف العنصر");
-                return;
-            }
-            setCart(data);
-        } catch {
+            await removeFromCart(itemId);
+        } catch (err) {
             setError("فشل حذف العنصر");
         } finally {
             setPendingId(null);
@@ -98,10 +49,10 @@ export default function CartPageClient() {
             setError("الكمية غير صحيحة");
             return;
         }
-        updateQuantity(item.id, quantity);
+        handleUpdateQuantity(item.id, quantity);
     }
 
-    if (loading) {
+    if (!isMounted) {
         return <div className="shop-page-card">جاري تحميل السلة...</div>;
     }
 
@@ -141,13 +92,13 @@ export default function CartPageClient() {
                                                 <span>{item.product.name}</span>
                                             </div>
                                         </td>
-                                        <td>{formatMoneyEGP(item.unit_price)}</td>
+                                        <td>{formatMoneyEGP(item.unit_price || 0)}</td>
                                         <td>
                                             <form className="d-flex gap-2" onSubmit={(event) => handleUpdateSubmit(event, item)}>
                                                 <input
                                                     type="number"
                                                     min={1}
-                                                    max={Math.max(item.max_quantity, 1)}
+                                                    max={Math.max(item.max_quantity || 100, 1)}
                                                     name="quantity"
                                                     defaultValue={item.quantity}
                                                     className="form-control"
@@ -158,9 +109,9 @@ export default function CartPageClient() {
                                                 </button>
                                             </form>
                                         </td>
-                                        <td>{formatMoneyEGP(item.line_total)}</td>
+                                        <td>{formatMoneyEGP(item.line_total || 0)}</td>
                                         <td>
-                                            <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => removeItem(item.id)} disabled={pendingId === item.id}>
+                                            <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => handleRemoveItem(item.id)} disabled={pendingId === item.id}>
                                                 حذف
                                             </button>
                                         </td>

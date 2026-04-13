@@ -17,26 +17,26 @@ export default function AdminAttributesPage() {
   const [addValueAttrId, setAddValueAttrId] = useState<number | null>(null);
 
   useEffect(() => {
-    fetch("/api/flask/admin/api/attributes").then((r) => r.json()).then(setAttributes).catch(() => {});
+    fetch("/api/flask/admin/api/attributes", { credentials: "include" }).then((r) => r.json()).then(setAttributes).catch(() => { });
   }, []);
 
   async function handleAddAttr(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    await fetch("/api/flask/admin/attributes/add", { method: "POST", body: fd });
+    await fetch("/api/flask/admin/attributes/add", { method: "POST", body: fd, credentials: "include" });
     setAddOpen(false); router.refresh();
   }
 
   async function handleEditAttr(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    await fetch(`/api/flask/admin/attributes/${editAttr?.id}/edit`, { method: "POST", body: fd });
+    await fetch(`/api/flask/admin/attributes/${editAttr?.id}/edit`, { method: "POST", body: fd, credentials: "include" });
     setEditAttr(null); router.refresh();
   }
 
   async function handleDeleteAttr(id: number) {
     if (!confirm("حذف السمة وجميع قيمها؟")) return;
-    await fetch(`/api/flask/admin/attributes/${id}`, { method: "DELETE" });
+    await fetch(`/api/flask/admin/attributes/${id}`, { method: "DELETE", credentials: "include" });
     setAttributes((prev) => prev.filter((a) => a.id !== id));
   }
 
@@ -44,12 +44,12 @@ export default function AdminAttributesPage() {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     fd.append("attr_id", String(attrId));
-    await fetch("/api/flask/admin/attributes/values/add", { method: "POST", body: fd });
+    await fetch("/api/flask/admin/attributes/values/add", { method: "POST", body: fd, credentials: "include" });
     setAddValueAttrId(null); router.refresh();
   }
 
   async function handleDeleteValue(valId: number) {
-    await fetch(`/api/flask/admin/attributes/values/${valId}`, { method: "DELETE" });
+    await fetch(`/api/flask/admin/attributes/values/${valId}`, { method: "DELETE", credentials: "include" });
     setAttributes((prev) => prev.map((a) => ({ ...a, values: a.values.filter((v) => v.id !== valId) })));
   }
 

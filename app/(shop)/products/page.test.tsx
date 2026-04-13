@@ -6,7 +6,7 @@ describe("ProductsIndexPage", () => {
         render(<ProductsIndexPage searchParams={{ category: "العناية بالبشرة" }} />);
 
         expect(screen.getByText("غسول وجه لطيف")).toBeInTheDocument();
-        expect(screen.queryByText("الحامد زيت الشعر المتطور")).not.toBeInTheDocument();
+        expect(screen.queryByText("الحمد زيت الشعر المتطور")).not.toBeInTheDocument();
     });
 
     it("filters out out-of-stock items when stock only is enabled", () => {

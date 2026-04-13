@@ -6,7 +6,7 @@ describe("next config rewrites", () => {
 
         expect(rewrites).toContainEqual({
             source: "/api/flask/:path*",
-            destination: "http://localhost:5000/:path*",
+            destination: "http://127.0.0.1:5000/:path*",
         });
     });
 });

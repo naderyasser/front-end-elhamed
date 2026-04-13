@@ -17,7 +17,6 @@ export function ChatWidget() {
     const [open, setOpen] = useState(false);
     const [typing, setTyping] = useState(false);
     const [input, setInput] = useState("");
-    const [unread] = useState(2);
     const [messages, setMessages] = useState<ChatMessage[]>([
         {
             id: 1,
@@ -173,11 +172,6 @@ export function ChatWidget() {
                 type="button"
             >
                 <MessageCircle className="h-6 w-6" />
-                {!open && unread > 0 && (
-                    <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1.5 text-[11px] font-semibold text-white">
-                        {unread}
-                    </span>
-                )}
                 {!open && <span className="chat-pulse" aria-hidden="true" />}
             </button>
         </div>

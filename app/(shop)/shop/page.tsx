@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { flaskServerJson } from "@/lib/flask-server";
+import { WishlistIconButton } from "@/components/shop/wishlist-icon-button";
 import { formatMoneyEGP, formatStoreImage } from "@/lib/store-utils";
 
 type ApiProduct = {
@@ -19,6 +20,8 @@ type ProductsResponse = {
 type CategoryNode = {
     id: number;
     name: string;
+    icon: string | null;
+    image: string | null;
     children?: CategoryNode[];
 };
 
@@ -26,10 +29,24 @@ type CategoryTreeResponse = {
     tree: CategoryNode[];
 };
 
-function flattenCategoryNames(tree: CategoryNode[]): string[] {
-    const result: string[] = [];
+type BannerSlide = {
+    id: number;
+    image_url: string;
+    title: string;
+    subtitle: string;
+    description: string;
+    link_url: string;
+    is_active: boolean;
+};
+
+type BannersResponse = {
+    banners: BannerSlide[];
+};
+
+function flattenCategories(tree: CategoryNode[]): CategoryNode[] {
+    const result: CategoryNode[] = [];
     const visit = (node: CategoryNode) => {
-        result.push(node.name);
+        result.push(node);
         (node.children || []).forEach(visit);
     };
     tree.forEach(visit);
@@ -37,43 +54,49 @@ function flattenCategoryNames(tree: CategoryNode[]): string[] {
 }
 
 export default async function ShopHomePage() {
-    const productsData = await flaskServerJson<ProductsResponse>("/api/shop/products?per_page=12&sort=default");
-    const categoryTree = await flaskServerJson<CategoryTreeResponse>("/api/categories/tree");
+    const [productsData, categoryTree, bannersData] = await Promise.all([
+        flaskServerJson<ProductsResponse>("/api/shop/products?per_page=12&sort=default", { next: { revalidate: 60 } } as RequestInit),
+        flaskServerJson<CategoryTreeResponse>("/api/categories/tree", { next: { revalidate: 300 } } as RequestInit),
+        flaskServerJson<BannersResponse>("/api/frontend/banners", { next: { revalidate: 300 } } as RequestInit),
+    ]);
 
     const allProducts = productsData?.products || [];
     const flashProducts = allProducts.slice(0, 4);
     const topProducts = allProducts.slice(4, 8).length ? allProducts.slice(4, 8) : allProducts.slice(0, 4);
-    const categoryNames = flattenCategoryNames(categoryTree?.tree || []).slice(0, 8);
+    const categories = flattenCategories(categoryTree?.tree || []).slice(0, 8);
+    const banners = bannersData?.banners || [];
+    const heroBanner = banners[0] || null;
 
     return (
         <main className="pb-4" dir="rtl">
             <div className="container-fluid px-3 px-lg-4 mt-3">
-                <div className="hp-greeting" id="greetingBanner">
-                    <span className="hp-greeting-icon">👋</span>
-                    <div className="hp-greeting-text">
-                        <h3>أهلاً بك في الحامد!</h3>
-                        <p>اكتشف أحدث العروض والمنتجات المميزة - شحن سريع لجميع أنحاء مصر</p>
-                    </div>
-                </div>
+
             </div>
 
             <section className="hero-section hp-hero">
                 <div className="container-fluid px-3 px-lg-4">
                     <div className="hero-slide position-relative overflow-hidden" style={{ borderRadius: 22 }}>
                         <div className="hero-bg">
-                            <img src="/static/images/banner-image2.jpg" alt="Hero" />
+                            <img
+                                src={heroBanner?.image_url || "/static/images/banner-image2.jpg"}
+                                alt={heroBanner?.title || "Hero"}
+                            />
                         </div>
                         <div className="container">
                             <div className="row">
                                 <div className="col-lg-7">
                                     <div className="hero-content">
-                                        <p className="hero-subtitle">منتجات العناية والجمال</p>
-                                        <h1 className="hero-title">الحامد سبراي الشعر المتطور</h1>
-                                        <p className="hero-description">
-                                            جودة احترافية، نتائج ملحوظة، وتجربة شراء بنفس تصميم المتجر الأصلي.
-                                        </p>
+                                        {heroBanner?.subtitle && (
+                                            <p className="hero-subtitle">{heroBanner.subtitle}</p>
+                                        )}
+                                        <h1 className="hero-title">
+                                            {heroBanner?.title || "متجر الحمد للاجهزة الكهربائية"}
+                                        </h1>
+                                        {heroBanner?.description && (
+                                            <p className="hero-description">{heroBanner.description}</p>
+                                        )}
                                         <div className="hero-buttons d-flex gap-2 flex-wrap">
-                                            <Link href="/shop/products" className="btn-shop btn-primary">
+                                            <Link href={heroBanner?.link_url || "/shop/products"} className="btn-shop btn-primary">
                                                 تسوق الآن <i className="bx bx-left-arrow-alt" />
                                             </Link>
                                             <Link href="/shop/about" className="btn-shop btn-outline">
@@ -91,12 +114,22 @@ export default async function ShopHomePage() {
             <section className="hp-categories-strip" dir="rtl">
                 <div className="container-fluid px-3 px-lg-4">
                     <div className="hp-cat-scroll">
-                        {categoryNames.map((category) => (
-                            <Link key={category} href={`/shop/products?category=${encodeURIComponent(category)}`} className="hp-cat-item">
-                                <div className="hp-cat-icon">
-                                    <i className="bx bx-category" />
-                                </div>
-                                <span className="hp-cat-name">{category}</span>
+                        {categories.map((cat) => (
+                            <Link key={cat.id} href={`/shop/products?category=${encodeURIComponent(cat.name)}`} className="hp-cat-item">
+                                {cat.image ? (
+                                    <div className="hp-cat-icon">
+                                        <img
+                                            src={formatStoreImage(cat.image)}
+                                            alt={cat.name}
+                                            loading="lazy"
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="hp-cat-icon">
+                                        <i className={`bx ${cat.icon ? `bx-${cat.icon}` : "bx-category"}`} />
+                                    </div>
+                                )}
+                                <span className="hp-cat-name">{cat.name}</span>
                             </Link>
                         ))}
                         <Link href="/shop/products" className="hp-cat-item">
@@ -202,9 +235,7 @@ export default async function ShopHomePage() {
                             <div key={product.id} className="col-sm-6 col-lg-3">
                                 <article className="product-card-modern h-100">
                                     {product.discount > 0 ? <span className="product-badge-modern">-{product.discount}%</span> : null}
-                                    <Link href={`/shop/wishlist`} className="product-wishlist-btn" aria-label="المفضلة">
-                                        <i className="bx bx-heart" />
-                                    </Link>
+                                    <WishlistIconButton productId={product.id} />
                                     <Link href={`/shop/products/${product.id}`} className="product-img-wrapper">
                                         <img src={formatStoreImage(product.image)} alt={product.name} />
                                     </Link>

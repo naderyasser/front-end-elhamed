@@ -13,7 +13,6 @@ const SHOP_PREFIXES = [
     "/checkout",
     "/search",
     "/wishlist",
-    "/return-policy",
     "/account",
     "/auth",
     "/orders",

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import { authenticatedGet } from "@/lib/admin-auth";
 
 // Load Chart.js + react-chartjs-2 client-only.
 // admin-charts.tsx registers all scales SYNCHRONOUSLY so they are
@@ -76,7 +77,7 @@ export default function AdminDashboardPage() {
     const params = new URLSearchParams();
     if (startDate) params.set("start_date", startDate);
     if (endDate) params.set("end_date", endDate);
-    fetch(`/api/flask/admin/api/dashboard?${params}`)
+    authenticatedGet(`/api/flask/admin/api/dashboard?${params}`)
       .then((r) => { if (!r.ok) throw new Error(r.status.toString()); return r.json(); })
       .then((d) => {
         if (!d || d.success === false) return;
@@ -369,7 +370,7 @@ function AdvancedSection() {
   } | null>(null);
 
   useEffect(() => {
-    fetch("/api/flask/admin/api/dashboard/advanced")
+    authenticatedGet("/api/flask/admin/api/dashboard/advanced")
       .then(r => r.ok ? r.json() : null).then(setAdv).catch(() => { });
   }, []);
 

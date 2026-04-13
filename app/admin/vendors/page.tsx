@@ -16,7 +16,7 @@ export default function AdminVendorsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`/api/flask/admin/api/vendors${filter ? `?status=${filter}` : ""}`)
+    fetch(`/api/flask/admin/api/vendors${filter ? `?status=${filter}` : ""}`, { credentials: "include" })
       .then(r => r.json()).then(d => setVendors(d.vendors || []))
       .finally(() => setLoading(false));
   }, [filter]);
@@ -24,7 +24,7 @@ export default function AdminVendorsPage() {
   async function updateStatus(vid: number, status: string, reason = "") {
     await fetch(`/api/flask/admin/api/vendors/${vid}/status`, {
       method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status, reason }),
+      body: JSON.stringify({ status, reason }), credentials: "include",
     });
     setVendors(prev => prev.map(v => v.id === vid ? { ...v, status } : v));
   }

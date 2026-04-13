@@ -22,7 +22,7 @@ export default function AdminReviewsPage() {
     useEffect(() => {
         setLoading(true);
         const params = filter ? `?status=${filter}` : "";
-        fetch(`/api/flask/admin/api/reviews${params}`)
+        fetch(`/api/flask/admin/api/reviews${params}`, { credentials: "include" })
             .then(r => r.json()).then(d => setReviews(d.reviews || []))
             .finally(() => setLoading(false));
     }, [filter]);
@@ -30,7 +30,7 @@ export default function AdminReviewsPage() {
     async function updateStatus(rid: number, status: string) {
         await fetch(`/api/flask/admin/api/reviews/${rid}/status`, {
             method: "PUT", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ status }),
+            body: JSON.stringify({ status }), credentials: "include",
         });
         setReviews(prev => prev.map(r => r.id === rid ? { ...r, status } : r));
     }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { flaskServerJson } from "@/lib/flask-server";
 import { formatMoneyEGP, formatStoreImage } from "@/lib/store-utils";
+import { WishlistRemoveButton } from "@/components/shop/wishlist-remove-button";
 
 type WishlistProduct = {
     id: number;
@@ -41,20 +42,10 @@ export default async function WishlistPage() {
                                         <strong>{formatMoneyEGP(product.final_price)}</strong>
                                         {!product.in_stock ? <div className="small text-danger mt-1">غير متوفر حاليا</div> : null}
                                         <div className="d-flex gap-2 mt-3 flex-wrap">
-                                            <form action={`/api/flask/cart/add/${product.id}`} method="post">
-                                                <input type="hidden" name="quantity" value="1" />
-                                                <button type="submit" className="btn btn-primary btn-sm" disabled={!product.in_stock}>
-                                                    أضف إلى السلة
-                                                </button>
-                                            </form>
-                                            <Link href={`/shop/products/${product.id}`} className="btn btn-outline-secondary btn-sm">
-                                                التفاصيل
+                                            <Link href={`/shop/products/${product.id}`} className="btn btn-primary btn-sm">
+                                                عرض المنتج
                                             </Link>
-                                            <form action={`/api/flask/api/wishlist/${product.id}`} method="post">
-                                                <button type="submit" className="btn btn-outline-danger btn-sm">
-                                                    إزالة
-                                                </button>
-                                            </form>
+                                            <WishlistRemoveButton productId={product.id} />
                                         </div>
                                     </div>
                                 </div>

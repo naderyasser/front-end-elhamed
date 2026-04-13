@@ -18,11 +18,14 @@ export default function AdminLoginPage() {
       const res = await fetch("/api/flask/admin/login", {
         method: "POST",
         body: formData,
+        credentials: 'include',
       });
-      if (res.ok) {
-        router.push("/admin/dashboard");
+      const data = await res.json().catch(() => ({}));
+
+      if (data.success) {
+        localStorage.setItem('admin_logged_in', 'true');
+        router.push(data.redirect || '/admin/dashboard');
       } else {
-        const data = await res.json().catch(() => ({}));
         setMessage({ text: data.message ?? "بيانات غير صحيحة", type: "error" });
       }
     } catch {
@@ -42,7 +45,7 @@ export default function AdminLoginPage() {
           <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#e3f2fd", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
             <i className="bx bxs-lock-alt" style={{ fontSize: 32, color: "#004c91" }} />
           </div>
-          <h1 style={{ fontSize: "1.4rem", fontWeight: 800, color: "#1a2b3c", margin: 0 }}>لوحة تحكم الحامد</h1>
+          <h1 style={{ fontSize: "1.4rem", fontWeight: 800, color: "#1a2b3c", margin: 0 }}>لوحة تحكم الحمد</h1>
           <p style={{ fontSize: "0.85rem", color: "#4a5568", marginTop: 4 }}>أدخل بيانات الدخول</p>
         </div>
 

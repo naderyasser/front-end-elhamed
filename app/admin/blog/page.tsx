@@ -28,8 +28,8 @@ export default function AdminBlogPage() {
     const load = () => {
         setLoading(true);
         Promise.all([
-            fetch("/api/flask/admin/api/blog/posts").then(r => r.json()),
-            fetch("/api/flask/admin/api/blog/categories").then(r => r.json()),
+            fetch("/api/flask/admin/api/blog/posts", { credentials: "include" }).then(r => r.json()),
+            fetch("/api/flask/admin/api/blog/categories", { credentials: "include" }).then(r => r.json()),
         ]).then(([p, c]) => {
             setPosts(p.posts || []);
             setCategories(c.categories || []);
@@ -55,21 +55,21 @@ export default function AdminBlogPage() {
         Object.entries(postForm).forEach(([k, v]) => fd.append(k, v));
         if (coverImage) fd.append("cover_image", coverImage);
         const url = editingPost ? `/api/flask/admin/api/blog/posts/${editingPost.id}` : "/api/flask/admin/api/blog/posts";
-        await fetch(url, { method: editingPost ? "PUT" : "POST", body: fd });
+        await fetch(url, { method: editingPost ? "PUT" : "POST", body: fd, credentials: "include" });
         setShowPostModal(false);
         load();
     }
 
     async function deletePost(id: number) {
         if (!confirm("هل أنت متأكد من حذف هذا المقال؟")) return;
-        await fetch(`/api/flask/admin/api/blog/posts/${id}`, { method: "DELETE" });
+        await fetch(`/api/flask/admin/api/blog/posts/${id}`, { method: "DELETE", credentials: "include" });
         load();
     }
 
     async function saveCat() {
         await fetch("/api/flask/admin/api/blog/categories", {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(catForm),
+            body: JSON.stringify(catForm), credentials: "include",
         });
         setCatForm({ name: "" });
         setShowCatModal(false);
@@ -95,7 +95,7 @@ export default function AdminBlogPage() {
             {/* Categories bar */}
             {categories.length > 0 && (
                 <div className="d-flex gap-2 mb-4 flex-wrap">
-                    {categories.map(c => (
+                    {(Array.isArray(categories) ? categories : []).map(c => (
                         <span key={c.id} style={{ background: "#f0f4f8", padding: "4px 14px", borderRadius: 20, fontSize: "0.82rem", color: "#555" }}>
                             {c.name}
                         </span>
@@ -170,7 +170,7 @@ export default function AdminBlogPage() {
                                     <label className="admin-form-label">التصنيف</label>
                                     <select className="admin-form-control" value={postForm.category_id} onChange={e => setPostForm({ ...postForm, category_id: e.target.value })}>
                                         <option value="">بدون تصنيف</option>
-                                        {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                        {(Array.isArray(categories) ? categories : []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                     </select>
                                 </div>
                                 <div className="col-6">

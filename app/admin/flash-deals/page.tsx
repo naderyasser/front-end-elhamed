@@ -21,24 +21,24 @@ export default function AdminFlashDealsPage() {
   const [addOpen, setAddOpen] = useState(false);
 
   useEffect(() => {
-    fetch("/api/flask/admin/api/flash-deals").then((r) => r.json()).then((d) => { setDeals(d?.deals ?? []); setProducts(d?.products ?? []); }).catch(() => { });
+    fetch("/api/flask/admin/api/flash-deals", { credentials: "include" }).then((r) => r.json()).then((d) => { setDeals(d?.deals ?? []); setProducts(d?.products ?? []); }).catch(() => { });
   }, []);
 
   async function handleToggle(id: number) {
-    await fetch(`/api/flask/admin/flash-deals/${id}/toggle`, { method: "POST" });
+    await fetch(`/api/flask/admin/flash-deals/${id}/toggle`, { method: "POST", credentials: "include" });
     setDeals((prev) => prev.map((d) => d.id === id ? { ...d, is_active: !d.is_active } : d));
   }
 
   async function handleDelete(id: number) {
     if (!confirm("حذف هذا العرض؟")) return;
-    await fetch(`/api/flask/admin/flash-deals/${id}`, { method: "DELETE" });
+    await fetch(`/api/flask/admin/flash-deals/${id}`, { method: "DELETE", credentials: "include" });
     setDeals((prev) => prev.filter((d) => d.id !== id));
   }
 
   async function handleAdd(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    await fetch("/api/flask/admin/flash-deals/add", { method: "POST", body: fd });
+    await fetch("/api/flask/admin/flash-deals/add", { method: "POST", body: fd, credentials: "include" });
     setAddOpen(false); router.refresh();
   }
 

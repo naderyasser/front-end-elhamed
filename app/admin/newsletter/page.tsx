@@ -17,16 +17,16 @@ export default function AdminNewsletterPage() {
     useEffect(() => {
         setLoading(true);
         if (tab === "subscribers") {
-            fetch("/api/flask/admin/api/newsletter/subscribers").then(r => r.json()).then(d => setSubscribers(d.subscribers || [])).finally(() => setLoading(false));
+            fetch("/api/flask/admin/api/newsletter/subscribers", { credentials: "include" }).then(r => r.json()).then(d => setSubscribers(d.subscribers || [])).finally(() => setLoading(false));
         } else {
-            fetch("/api/flask/admin/api/newsletter/campaigns").then(r => r.json()).then(d => setCampaigns(d.campaigns || [])).finally(() => setLoading(false));
+            fetch("/api/flask/admin/api/newsletter/campaigns", { credentials: "include" }).then(r => r.json()).then(d => setCampaigns(d.campaigns || [])).finally(() => setLoading(false));
         }
     }, [tab]);
 
     async function saveCampaign() {
         await fetch("/api/flask/admin/api/newsletter/campaigns", {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(campForm),
+            body: JSON.stringify(campForm), credentials: "include",
         });
         setCampForm({ subject: "", body_html: "" });
         setShowModal(false);

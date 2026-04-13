@@ -18,31 +18,31 @@ export default function AdminBannersPage() {
   const [editBanner, setEditBanner] = useState<Banner | null>(null);
 
   useEffect(() => {
-    fetch("/api/flask/admin/api/banners").then((r) => r.json()).then(setBanners).catch(() => {});
+    fetch("/api/flask/admin/api/banners", { credentials: "include" }).then((r) => r.json()).then(setBanners).catch(() => { });
   }, []);
 
   async function handleAdd(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    await fetch("/api/flask/admin/banners/add", { method: "POST", body: fd });
+    await fetch("/api/flask/admin/banners/add", { method: "POST", body: fd, credentials: "include" });
     setAddOpen(false); router.refresh();
   }
 
   async function handleEdit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    await fetch(`/api/flask/admin/banners/${editBanner?.id}/edit`, { method: "POST", body: fd });
+    await fetch(`/api/flask/admin/banners/${editBanner?.id}/edit`, { method: "POST", body: fd, credentials: "include" });
     setEditBanner(null); router.refresh();
   }
 
   async function handleDelete(id: number) {
     if (!confirm("حذف البانر؟")) return;
-    await fetch(`/api/flask/admin/banners/${id}`, { method: "DELETE" });
+    await fetch(`/api/flask/admin/banners/${id}`, { method: "DELETE", credentials: "include" });
     setBanners((prev) => prev.filter((b) => b.id !== id));
   }
 
   async function toggleActive(id: number) {
-    await fetch(`/api/flask/admin/banners/${id}/toggle`, { method: "POST" });
+    await fetch(`/api/flask/admin/banners/${id}/toggle`, { method: "POST", credentials: "include" });
     setBanners((prev) => prev.map((b) => b.id === id ? { ...b, is_active: !b.is_active } : b));
   }
 

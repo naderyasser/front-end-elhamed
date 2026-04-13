@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { flaskServerJson } from "@/lib/flask-server";
+import DOMPurify from "isomorphic-dompurify";
 
 export const dynamic = "force-dynamic";
 
@@ -57,7 +58,7 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
                 <div className="shop-page-card">
                     <div
                         style={{ fontSize: "1rem", lineHeight: 2, color: "#333" }}
-                        dangerouslySetInnerHTML={{ __html: post.body_html }}
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(post.body_html) }}
                     />
                 </div>
 

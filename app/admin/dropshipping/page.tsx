@@ -19,7 +19,7 @@ export default function AdminDropshippingPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch("/api/flask/admin/api/dropshipping").then((r) => r.json()).then((d) => setItems(d?.items ?? [])).catch(() => { });
+    fetch("/api/flask/admin/api/dropshipping", { credentials: "include" }).then((r) => r.json()).then((d) => setItems(d?.items ?? [])).catch(() => { });
   }, []);
 
   const imported = items.filter((i) => i.status === "imported").length;
@@ -31,22 +31,37 @@ export default function AdminDropshippingPage() {
     try {
       const fd = new FormData();
       fd.append("url", url);
-      const res = await fetch("/api/flask/admin/dropshipping/scrape", { method: "POST", body: fd });
-      if (!res.ok) throw new Error("فشل الجلب");
-      setUrl(""); router.refresh();
+      const res = await fetch("/api/flask/admin/dropshipping/scrape", {
+        method: "POST", body: fd, credentials: "include",
+        headers: { "Accept": "application/json" },
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setError(data.message || "فشل الجلب");
+      } else {
+        setUrl("");
+      }
+      // Reload items from API after scrape
+      const d = await fetch("/api/flask/admin/api/dropshipping", { credentials: "include" }).then(r => r.json());
+      setItems(d?.items ?? []);
     } catch {
       setError("تعذر جلب البيانات من هذا الرابط");
     } finally { setLoading(false); }
   }
 
   async function handleImport(id: number) {
-    await fetch(`/api/flask/admin/dropshipping/${id}/import`, { method: "POST" });
-    setItems((prev) => prev.map((i) => i.id === id ? { ...i, status: "imported" } : i));
+    const res = await fetch(`/api/flask/admin/dropshipping/${id}/import`, { method: "POST", credentials: "include" });
+    if (res.ok) {
+      setItems((prev) => prev.map((i) => i.id === id ? { ...i, status: "imported" } : i));
+    }
   }
 
   async function handleDelete(id: number) {
-    await fetch(`/api/flask/admin/dropshipping/${id}`, { method: "DELETE" });
-    setItems((prev) => prev.filter((i) => i.id !== id));
+    if (!confirm("هل أنت متأكد من حذف هذا المنتج؟")) return;
+    const res = await fetch(`/api/flask/admin/dropshipping/${id}`, { method: "DELETE", credentials: "include" });
+    if (res.ok) {
+      setItems((prev) => prev.filter((i) => i.id !== id));
+    }
   }
 
   return (

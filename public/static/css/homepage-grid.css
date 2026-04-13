@@ -241,8 +241,8 @@
 .hp-promo-text p { font-size: 0.9rem; opacity: 0.9; margin-bottom: 0.75rem; }
 
 .hp-promo-btn {
-    background: var(--alha-primary);
-    color: var(--alha-navy, #1a1a2e);
+    background: var(--alha-cta);
+    color: #1A2B3C;
     border: none;
     padding: 0.5rem 1.25rem;
     border-radius: 6px;
@@ -254,7 +254,7 @@
     transition: background 0.2s;
 }
 
-.hp-promo-btn:hover { background: var(--alha-primary-dark); }
+.hp-promo-btn:hover { background: var(--alha-cta-hover); }
 
 @media (max-width: 767px) {
     .hp-promo-overlay { padding: 1rem; }

@@ -1,7 +1,249 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
+
+// Dynamic imports with SSR disabled to prevent hydration errors
+const FooterLogo = dynamic(() => import("../FooterLogo"), { ssr: false });
+
+// ─── Isolated Flash Deal Timer (avoids re-rendering the full ShopShell) ─────
+const FlashDealTimer = memo(function FlashDealTimer() {
+    const [timeLeft, setTimeLeft] = useState("00:00:00");
+    useEffect(() => {
+        const endDate = new Date("2026-06-30T23:59:59+02:00").getTime();
+        const timer = setInterval(() => {
+            const diff = Math.max(endDate - Date.now(), 0);
+            if (diff === 0) clearInterval(timer);
+            const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+            const minutes = Math.floor((diff / (1000 * 60)) % 60);
+            const seconds = Math.floor((diff / 1000) % 60);
+            setTimeLeft(
+                `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`,
+            );
+        }, 1000);
+        return () => clearInterval(timer);
+    }, []);
+    return <span suppressHydrationWarning>{timeLeft}</span>;
+});
+
+// ─── Search Result Type ─────────────────────────────────────────────────────
+type SearchResult = {
+    id: number;
+    path: string;
+    name: string;
+    image: string;
+    price: number;
+    old_price?: number;
+    discount?: number;
+    category?: string;
+    brand?: string;
+};
+
+// ─── Smart Search Component ─────────────────────────────────────────────────
+const RECENT_SEARCHES_KEY = "alha_recent_searches";
+const MAX_RECENT = 5;
+
+function getRecentSearches(): string[] {
+    if (typeof window === "undefined") return [];
+    try {
+        const raw = localStorage.getItem(RECENT_SEARCHES_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+}
+function addRecentSearch(q: string) {
+    if (!q.trim()) return;
+    const recent = getRecentSearches().filter(s => s !== q.trim());
+    recent.unshift(q.trim());
+    localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(recent.slice(0, MAX_RECENT)));
+}
+
+const SmartSearch = memo(function SmartSearch({ className, onNavigate }: { className?: string; onNavigate?: () => void }) {
+    const [query, setQuery] = useState("");
+    const [results, setResults] = useState<SearchResult[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [open, setOpen] = useState(false);
+    const [recentSearches, setRecentSearches] = useState<string[]>([]);
+    const wrapRef = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Load recent searches on mount
+    useEffect(() => { setRecentSearches(getRecentSearches()); }, []);
+
+    // Close on outside click
+    useEffect(() => {
+        function handleClick(e: MouseEvent) {
+            if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+        }
+        document.addEventListener("mousedown", handleClick);
+        return () => document.removeEventListener("mousedown", handleClick);
+    }, []);
+
+    // Close on Escape
+    useEffect(() => {
+        function handleKey(e: KeyboardEvent) {
+            if (e.key === "Escape") { setOpen(false); inputRef.current?.blur(); }
+        }
+        document.addEventListener("keydown", handleKey);
+        return () => document.removeEventListener("keydown", handleKey);
+    }, []);
+
+    // Cleanup debounce timer on unmount
+    useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
+
+    const doSearch = useCallback(async (q: string) => {
+        if (q.length < 2) { setResults([]); setLoading(false); return; }
+        setLoading(true);
+        try {
+            const res = await fetch(`/api/flask/api/search?q=${encodeURIComponent(q)}&limit=6`);
+            if (res.ok) {
+                const data = await res.json();
+                setResults(data.results || []);
+            } else {
+                setResults([]);
+            }
+        } catch { setResults([]); }
+        setLoading(false);
+    }, []);
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        setQuery(val);
+        setOpen(true);
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => doSearch(val), 300);
+    };
+
+    const handleFocus = () => {
+        setOpen(true);
+        setRecentSearches(getRecentSearches());
+        if (query.length >= 2) doSearch(query);
+    };
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!query.trim()) return;
+        addRecentSearch(query);
+        setOpen(false);
+        window.location.href = `/shop/search?q=${encodeURIComponent(query.trim())}`;
+        onNavigate?.();
+    };
+
+    const handleResultClick = (r: SearchResult) => {
+        addRecentSearch(query);
+        setOpen(false);
+        onNavigate?.();
+        // Log the click
+        fetch("/api/flask/api/search/log", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ query, product_id: r.id }),
+        }).catch(() => { });
+    };
+
+    const handleRecentClick = (term: string) => {
+        setQuery(term);
+        setOpen(true);
+        doSearch(term);
+    };
+
+    const clearRecent = () => {
+        localStorage.removeItem(RECENT_SEARCHES_KEY);
+        setRecentSearches([]);
+    };
+
+    const showRecent = open && query.length < 2 && recentSearches.length > 0;
+    const showResults = open && query.length >= 2;
+
+    return (
+        <div ref={wrapRef} className={`smart-search ${className || ""}`}>
+            <form onSubmit={handleSubmit} className="smart-search-form">
+                <i className="bx bx-search smart-search-icon" />
+                <input
+                    ref={inputRef}
+                    type="search"
+                    name="q"
+                    value={query}
+                    onChange={handleChange}
+                    onFocus={handleFocus}
+                    className="smart-search-input"
+                    placeholder="ابحث عن منتج..."
+                    autoComplete="off"
+                />
+                {query && (
+                    <button type="button" className="smart-search-clear" onClick={() => { setQuery(""); setResults([]); inputRef.current?.focus(); }} aria-label="مسح">
+                        <i className="bx bx-x" />
+                    </button>
+                )}
+                {loading && <span className="smart-search-spinner" />}
+            </form>
+
+            {/* Recent searches dropdown */}
+            {showRecent && (
+                <div className="smart-search-dropdown">
+                    <div className="ssd-header">
+                        <span>عمليات بحث سابقة</span>
+                        <button type="button" onClick={clearRecent} className="ssd-clear-btn">مسح</button>
+                    </div>
+                    {recentSearches.map(term => (
+                        <button key={term} type="button" className="ssd-recent-item" onClick={() => handleRecentClick(term)}>
+                            <i className="bx bx-history" />
+                            <span>{term}</span>
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            {/* Autocomplete results dropdown */}
+            {showResults && (
+                <div className="smart-search-dropdown">
+                    {loading && results.length === 0 ? (
+                        <div className="ssd-loading">
+                            <span className="smart-search-spinner" /> جاري البحث...
+                        </div>
+                    ) : results.length === 0 && !loading ? (
+                        <div className="ssd-empty">
+                            <i className="bx bx-search-alt" />
+                            <span>لا توجد نتائج لـ &quot;{query}&quot;</span>
+                        </div>
+                    ) : (
+                        <>
+                            {results.map(r => (
+                                <Link
+                                    key={r.id}
+                                    href={`/shop/products/${r.id}`}
+                                    className="ssd-result-item"
+                                    onClick={() => handleResultClick(r)}
+                                >
+                                    <img
+                                        src={r.image || "/static/images/placeholder.png"}
+                                        alt={r.name}
+                                        className="ssd-result-img"
+                                        loading="lazy"
+                                    />
+                                    <div className="ssd-result-info">
+                                        <span className="ssd-result-name">{r.name}</span>
+                                        <div className="ssd-result-meta">
+                                            <span className="ssd-result-price">{r.price} ج.م</span>
+                                            {r.old_price && r.old_price > r.price && (
+                                                <span className="ssd-result-old-price">{r.old_price} ج.م</span>
+                                            )}
+                                            {r.category && <span className="ssd-result-cat">{r.category}</span>}
+                                        </div>
+                                    </div>
+                                </Link>
+                            ))}
+                            <Link href={`/shop/search?q=${encodeURIComponent(query)}`} className="ssd-view-all" onClick={() => { addRecentSearch(query); setOpen(false); onNavigate?.(); }}>
+                                عرض كل النتائج <i className="bx bx-left-arrow-alt" />
+                            </Link>
+                        </>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+});
 
 type ShopShellProps = {
     children: React.ReactNode;
@@ -9,13 +251,46 @@ type ShopShellProps = {
 
 export function ShopShell({ children }: ShopShellProps) {
     const [mobileOpen, setMobileOpen] = useState(false);
+    const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
     const [theme, setTheme] = useState<"light" | "dark">("light");
-    const [timeLeft, setTimeLeft] = useState("00:00:00");
+    const [scrolled, setScrolled] = useState(false);
     type CatNode = { name: string; name_en?: string; icon?: string; image?: string; children?: CatNode[] };
     const [catTree, setCatTree] = useState<CatNode[]>([]);
     const [megaOpen, setMegaOpen] = useState(false);
     const [activeMega, setActiveMega] = useState<CatNode | null>(null);
     const megaTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const [isAuthed, setIsAuthed] = useState(false);
+
+    useEffect(() => {
+        let cancelled = false;
+        async function loadAuth() {
+            try {
+                const res = await fetch("/api/flask/api/frontend/me", { cache: "no-store", credentials: "include" });
+                if (!res.ok) return;
+                const data = await res.json();
+                if (!cancelled) setIsAuthed(Boolean(data?.authenticated));
+            } catch {
+                /* ignore */
+            }
+        }
+        loadAuth();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    async function handleLogout(e: React.MouseEvent) {
+        e.preventDefault();
+        try {
+            await fetch("/api/flask/logout", { method: "POST", credentials: "include" });
+        } catch {
+            /* ignore */
+        }
+        setIsAuthed(false);
+        if (typeof window !== "undefined") {
+            window.location.href = "/shop";
+        }
+    }
 
     useEffect(() => {
         const stored = localStorage.getItem("theme");
@@ -28,27 +303,19 @@ export function ShopShell({ children }: ShopShellProps) {
     }, []);
 
     useEffect(() => {
-        const timer = setInterval(() => {
-            const endDate = new Date("2026-06-30T23:59:59").getTime();
-            const now = Date.now();
-            const diff = Math.max(endDate - now, 0);
-            const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
-            const minutes = Math.floor((diff / (1000 * 60)) % 60);
-            const seconds = Math.floor((diff / 1000) % 60);
-            setTimeLeft(
-                `${hours.toString().padStart(2, "0")}:${minutes
-                    .toString()
-                    .padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`,
-            );
-        }, 1000);
-
-        return () => clearInterval(timer);
+        const onScroll = () => setScrolled(window.scrollY > 40);
+        window.addEventListener("scroll", onScroll, { passive: true });
+        return () => window.removeEventListener("scroll", onScroll);
     }, []);
+
 
     useEffect(() => {
         async function loadCategories() {
             try {
                 const response = await fetch("/api/flask/api/categories/tree", { cache: "no-store" });
+                if (!response.ok) {
+                    throw new Error(`Categories fetch failed: ${response.status}`);
+                }
                 const data = await response.json();
                 setCatTree(data?.tree || []);
             } catch {
@@ -80,6 +347,9 @@ export function ShopShell({ children }: ShopShellProps) {
         megaTimer.current = setTimeout(() => setMegaOpen(false), 200);
     }
 
+    // Cleanup mega timer on unmount
+    useEffect(() => () => { if (megaTimer.current) clearTimeout(megaTimer.current); }, []);
+
     const toggleTheme = () => {
         const next = theme === "dark" ? "light" : "dark";
         setTheme(next);
@@ -96,7 +366,7 @@ export function ShopShell({ children }: ShopShellProps) {
                     <span>
                         استخدم الكود: <span className="discount-code">ALHAMD10</span>
                     </span>
-                    <span className="time-block">{timeLeft}</span>
+                    <span className="time-block"><FlashDealTimer /></span>
                 </div>
             </div>
 
@@ -121,108 +391,113 @@ export function ShopShell({ children }: ShopShellProps) {
                 </div>
             </div>
 
-            <header className="modern-header site-header">
-                <nav className="modern-navbar navbar">
-                    <div className="container-fluid px-3 px-lg-4 modern-navbar-inner">
-                        <Link href="/shop" className="modern-brand">
-                            <img src="/static/images/logo-alha.jpeg" className="modern-logo" alt="شعار الحامد" />
+            <header className={`alha-header${scrolled ? " scrolled" : ""}`}>
+                <div className="alha-header-inner">
+                    {/* ── Logo ── */}
+                    <Link href="/shop" className="alha-header-logo">
+                        <img src="/static/images/logo-alha.jpeg" alt="شعار الحمد" suppressHydrationWarning />
+                    </Link>
+
+                    {/* ── Desktop Nav Links ── */}
+                    <nav className="alha-desktop-nav">
+                        <Link href="/shop" className="alha-nav-link">الرئيسية</Link>
+                        <Link href="/shop/products" className="alha-nav-link">المتجر</Link>
+                        <div
+                            className="alha-nav-link alha-nav-categories"
+                            onMouseEnter={openMega}
+                            onMouseLeave={closeMega}
+                        >
+                            الأقسام <i className="bx bx-chevron-down" style={{ fontSize: 12, marginRight: 2 }} />
+                        </div>
+                        <Link href="/shop/about" className="alha-nav-link">من نحن</Link>
+                    </nav>
+
+                    {/* ── Desktop Search ── */}
+                    <SmartSearch className="alha-desktop-search" />
+
+                    {/* ── Header Actions ── */}
+                    <div className="alha-header-actions">
+                        {/* Mobile search toggle */}
+                        <button
+                            type="button"
+                            className="alha-action-btn alha-mobile-search-toggle"
+                            aria-label="بحث"
+                            onClick={() => setMobileSearchOpen(prev => {
+                                const next = !prev;
+                                if (next) {
+                                    setTimeout(() => {
+                                        (document.querySelector(".alha-mobile-search .smart-search-input") as HTMLInputElement | null)?.focus();
+                                    }, 250);
+                                }
+                                return next;
+                            })}
+                        >
+                            <i className={mobileSearchOpen ? "bx bx-x" : "bx bx-search"} />
+                        </button>
+
+                        <button type="button" className="alha-action-btn" onClick={toggleTheme} aria-label="تبديل الوضع">
+                            <i className={theme === "dark" ? "bx bx-sun" : "bx bx-moon"} />
+                        </button>
+                        <Link href="/shop/wishlist" className="alha-action-btn" aria-label="المفضلة">
+                            <i className="bx bx-heart" />
+                        </Link>
+                        <Link href="/shop/cart" className="alha-action-btn alha-cart-action" aria-label="السلة">
+                            <i className="bx bx-cart" />
                         </Link>
 
-                        <div className="modern-search-wrapper">
-                            <form action="/shop/search" method="get" className="modern-search-box">
-                                <input
-                                    type="text"
-                                    name="q"
-                                    className="modern-search-input"
-                                    placeholder="ابحث عن المنتجات، الماركات أو الفئات..."
-                                />
-                                <button type="submit" className="modern-search-btn" aria-label="بحث">
-                                    <i className="bx bx-search" />
-                                </button>
-                            </form>
-                        </div>
-
-                        <div className="desktop-actions d-flex align-items-center gap-2">
-                            <ul className="modern-nav-links">
-                                <li>
-                                    <Link className="modern-nav-link" href="/shop">
-                                        الرئيسية
-                                    </Link>
-                                </li>
-                                <li>
-                                    <Link className="modern-nav-link" href="/shop/products">
-                                        المتجر
-                                    </Link>
-                                </li>
-                                <li>
-                                    <Link className="modern-nav-link" href="/shop/about">
-                                        من نحن
-                                    </Link>
-                                </li>
-                                <li>
-                                    <Link className="modern-nav-link" href="/shop/account">
-                                        حسابي
-                                    </Link>
-                                </li>
-                                <li>
-                                    <Link href="/shop/wishlist" className="modern-cart-btn" aria-label="المفضلة">
-                                        <i className="bx bx-heart" />
-                                    </Link>
-                                </li>
-                                <li>
-                                    <Link href="/shop/cart" className="modern-cart-btn" aria-label="السلة">
-                                        <i className="bx bx-cart" />
-                                    </Link>
-                                </li>
-                                <li>
-                                    <button type="button" className="theme-toggle-btn" onClick={toggleTheme} aria-label="تبديل الوضع">
-                                        <i className={theme === "dark" ? "bx bx-sun" : "bx bx-moon"} />
-                                    </button>
-                                </li>
-                            </ul>
-                        </div>
-
-                        <div className="d-flex d-lg-none align-items-center gap-2">
-                            <button type="button" className="theme-toggle-btn" onClick={toggleTheme} aria-label="تبديل الوضع">
-                                <i className={theme === "dark" ? "bx bx-sun" : "bx bx-moon"} />
-                            </button>
-                            <Link href="/shop/wishlist" className="modern-cart-btn" aria-label="المفضلة">
-                                <i className="bx bx-heart" />
+                        {/* Desktop user menu */}
+                        {isAuthed ? (
+                            <div className="alha-user-menu">
+                                <Link href="/shop/account" className="alha-action-btn" aria-label="حسابي">
+                                    <i className="bx bx-user" />
+                                </Link>
+                                <a href="#" className="alha-action-btn alha-desktop-only" onClick={handleLogout} aria-label="خروج" title="تسجيل الخروج">
+                                    <i className="bx bx-log-out" />
+                                </a>
+                            </div>
+                        ) : (
+                            <Link href="/shop/auth/login" className="alha-action-btn alha-desktop-only" aria-label="تسجيل الدخول">
+                                <i className="bx bx-user" />
                             </Link>
-                            <Link href="/shop/cart" className="modern-cart-btn" aria-label="السلة">
-                                <i className="bx bx-cart" />
-                            </Link>
-                            <button
-                                type="button"
-                                className="mobile-menu-btn"
-                                aria-label="فتح القائمة"
-                                onClick={() => setMobileOpen(true)}
-                            >
-                                <i className="bx bx-menu" style={{ fontSize: 24 }} />
-                            </button>
-                        </div>
+                        )}
+
+                        {/* Mobile hamburger */}
+                        <button
+                            type="button"
+                            className="alha-action-btn alha-hamburger"
+                            aria-label="القائمة"
+                            onClick={() => setMobileOpen(true)}
+                        >
+                            <i className="bx bx-menu" />
+                        </button>
                     </div>
-                </nav>
+                </div>
+
+                {/* ── Mobile Expandable Search ── */}
+                <div className={`alha-mobile-search${mobileSearchOpen ? " open" : ""}`}>
+                    <SmartSearch className="alha-mobile-search-inner" onNavigate={() => setMobileSearchOpen(false)} />
+                </div>
             </header>
 
-            <nav className="sub-nav-bar" style={{ position: "relative" }}>
+            <nav className="sub-nav-bar">
                 <div className="container-fluid px-3 px-lg-4">
                     <div className="sub-nav-scroll">
                         <Link href="/shop/products?sort=discount" className="sub-nav-link sub-nav-deals">
                             <i className="bx bxs-hot" /> عروض اليوم
                         </Link>
-                        <span
+                        <Link
+                            href="/shop/categories"
                             className="sub-nav-link"
-                            style={{ cursor: "pointer", position: "relative" }}
+                            style={{ position: "relative" }}
                             onMouseEnter={openMega}
                             onMouseLeave={closeMega}
                         >
                             <i className="bx bx-category" /> الأقسام <i className="bx bx-chevron-down" style={{ fontSize: 12 }} />
-                        </span>
+                        </Link>
                         <Link href="/shop/products?sort=rating" className="sub-nav-link">
                             <i className="bx bx-trending-up" /> الأكثر مبيعا
                         </Link>
-                        <Link href="/shop/products?sort=newest" className="sub-nav-link">
+                        <Link href="/shop/new-arrivals" className="sub-nav-link">
                             <i className="bx bx-star" /> وصل حديثا
                         </Link>
                         {categoryLinks.map((category) => (
@@ -310,22 +585,18 @@ export function ShopShell({ children }: ShopShellProps) {
                 <i className="bx bxl-facebook" style={{ fontSize: 24 }} />
             </a>
 
-            <footer id="footer" className="padding-large">
+            <footer id="footer" className="padding-large footer-premium">
                 <div className="container">
                     <div className="row">
                         <div className="col-lg-3 col-sm-6 pb-3">
-                            <img
-                                src="/static/images/logo-alha.jpeg"
-                                alt="شعار الحامد"
-                                className="pb-3"
-                                style={{ width: 150, borderRadius: 12 }}
-                            />
-                            <p>مرحباً بكم في الحامد، وجهتكم المثالية للمنتجات الفاخرة والعناية بالجمال.</p>
+                            <div className="footer-logo-section">
+                                <FooterLogo />
+                            </div>
                         </div>
 
                         <div className="col-lg-2 col-sm-6 pb-3">
-                            <h5 className="widget-title pb-2">الأقسام</h5>
-                            <ul className="list-unstyled">
+                            <h5 className="footer-title">الأقسام</h5>
+                            <ul className="footer-links">
                                 {categories.slice(0, 4).map((category) => (
                                     <li key={category}>
                                         <Link href={`/shop/products?category=${encodeURIComponent(category)}`}>{category}</Link>
@@ -338,8 +609,8 @@ export function ShopShell({ children }: ShopShellProps) {
                         </div>
 
                         <div className="col-lg-2 col-sm-6 pb-3">
-                            <h5 className="widget-title pb-2">روابط سريعة</h5>
-                            <ul className="list-unstyled">
+                            <h5 className="footer-title">روابط سريعة</h5>
+                            <ul className="footer-links">
                                 <li>
                                     <Link href="/shop">الرئيسية</Link>
                                 </li>
@@ -362,32 +633,49 @@ export function ShopShell({ children }: ShopShellProps) {
                         </div>
 
                         <div className="col-lg-2 col-sm-6 pb-3">
-                            <h5 className="widget-title pb-2">تابعونا</h5>
-                            <ul className="list-unstyled">
+                            <h5 className="footer-title">خدمة العملاء</h5>
+                            <ul className="footer-links">
                                 <li>
-                                    <a href="https://www.facebook.com/share/1HBiHzhNp9/" target="_blank" rel="noreferrer">
-                                        فيسبوك
-                                    </a>
+                                    <Link href="/shop/faq">الأسئلة الشائعة</Link>
                                 </li>
                                 <li>
-                                    <a href="https://wa.me/201050188516" target="_blank" rel="noreferrer">
-                                        واتساب
-                                    </a>
+                                    <Link href="/shop/orders">تتبع الطلبات</Link>
+                                </li>
+                                <li>
+                                    <Link href="/shop/account">حسابي</Link>
                                 </li>
                             </ul>
                         </div>
 
                         <div className="col-lg-3 col-sm-6">
-                            <h5 className="widget-title pb-2">تواصل معنا</h5>
-                            <p>
-                                <i className="bx bx-phone" /> <a href="tel:+201050188516">+20 105 018 8516</a>
-                            </p>
-                            <p>
-                                <i className="bx bx-envelope" /> <a href="mailto:info@alhamd-store.com">info@alhamd-store.com</a>
-                            </p>
-                            <p>
-                                <i className="bx bx-map" /> مصر
-                            </p>
+                            <h5 className="footer-title">تواصل معنا</h5>
+                            <div className="footer-contact-info">
+                                <div className="footer-contact-item">
+                                    <i className="bx bx-phone footer-contact-icon" />
+                                    <a href="tel:+201050188516" className="footer-contact-link">
+                                        +20 105 018 8516
+                                    </a>
+                                </div>
+                                <div className="footer-contact-item">
+                                    <i className="bx bx-map footer-contact-icon" />
+                                    <span className="footer-contact-text">مصر</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="footer-bottom">
+                        <div className="row align-items-center">
+                            <div className="col-md-6 text-center text-md-end">
+                                <p className="footer-copyright mb-0">
+                                    <i className="bx bx-copyright" /> 2026 الحمد - جميع الحقوق محفوظة
+                                </p>
+                            </div>
+                            <div className="col-md-6 text-center text-md-start">
+                                <div className="footer-payment-methods">
+                                    <span className="footer-cash-badge">الدفع عند الاستلام</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -414,13 +702,18 @@ export function ShopShell({ children }: ShopShellProps) {
 
             <div className={`mobile-drawer-overlay ${mobileOpen ? "open" : ""}`} onClick={() => setMobileOpen(false)} />
             <aside className={`mobile-nav-drawer ${mobileOpen ? "open" : ""}`} dir="rtl">
-                <div className="d-flex align-items-center justify-content-between p-3 border-bottom">
-                    <img src="/static/images/logo-alha.jpeg" alt="شعار الحامد" style={{ width: 56, borderRadius: 8 }} />
+                <div className="d-flex align-items-center justify-content-between p-3 border-bottom" style={{ flexShrink: 0 }}>
+                    <img src="/static/images/logo-alha.jpeg" alt="شعار الحمد" style={{ width: 56, borderRadius: 8 }} suppressHydrationWarning />
                     <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setMobileOpen(false)}>
                         <i className="bx bx-x" style={{ fontSize: 18 }} />
                     </button>
                 </div>
-                <div className="p-3">
+                {/* Search area — not clipped by overflow */}
+                <div className="px-3 pt-3 pb-1" style={{ flexShrink: 0, position: 'relative', zIndex: 10 }}>
+                    <SmartSearch className="mb-0" onNavigate={() => setMobileOpen(false)} />
+                </div>
+                {/* Scrollable nav links */}
+                <div className="mobile-drawer-scroll px-3 pb-3 pt-2">
                     <Link href="/shop" className="mobile-nav-item" onClick={() => setMobileOpen(false)}>
                         <i className="bx bx-home-alt" /> الرئيسية
                     </Link>
@@ -430,12 +723,27 @@ export function ShopShell({ children }: ShopShellProps) {
                     <Link href="/shop/about" className="mobile-nav-item" onClick={() => setMobileOpen(false)}>
                         <i className="bx bx-info-circle" /> من نحن
                     </Link>
-                    <Link href="/shop/account" className="mobile-nav-item" onClick={() => setMobileOpen(false)}>
-                        <i className="bx bx-user-circle" /> حسابي
-                    </Link>
-                    <Link href="/shop/auth/login" className="mobile-nav-item" onClick={() => setMobileOpen(false)}>
-                        <i className="bx bx-log-in" /> تسجيل الدخول
-                    </Link>
+                    {isAuthed ? (
+                        <>
+                            <Link href="/shop/account" className="mobile-nav-item" onClick={() => setMobileOpen(false)}>
+                                <i className="bx bx-user-circle" /> حسابي
+                            </Link>
+                            <a
+                                href="#"
+                                className="mobile-nav-item"
+                                onClick={(e) => {
+                                    setMobileOpen(false);
+                                    handleLogout(e);
+                                }}
+                            >
+                                <i className="bx bx-log-out" /> تسجيل الخروج
+                            </a>
+                        </>
+                    ) : (
+                        <Link href="/shop/auth/login" className="mobile-nav-item" onClick={() => setMobileOpen(false)}>
+                            <i className="bx bx-log-in" /> إنشاء حساب / تسجيل الدخول
+                        </Link>
+                    )}
                     {/* Mobile categories accordion */}
                     {catTree.length > 0 && (
                         <div style={{ marginTop: 12 }}>
@@ -456,71 +764,6 @@ export function ShopShell({ children }: ShopShellProps) {
                     )}
                 </div>
             </aside>
-
-            {/* Mega Menu Styles */}
-            <style>{`
-                .mega-menu-wrap {
-                    position: absolute; top: 100%; right: 0; left: 0;
-                    z-index: 100; padding-top: 2px;
-                    animation: megaFadeIn 0.15s ease;
-                }
-                @keyframes megaFadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
-                .mega-menu-inner {
-                    display: flex; direction: rtl;
-                    background: var(--hz-card-bg, #fff); border: 1px solid var(--hz-border, #e8edf2);
-                    border-radius: 0 0 16px 16px; box-shadow: 0 12px 40px rgba(0,0,0,0.12);
-                    max-width: 900px; margin: 0 auto;
-                    min-height: 260px; overflow: hidden;
-                }
-                .mega-col-roots {
-                    width: 220px; flex-shrink: 0;
-                    border-left: 1px solid var(--hz-border, #e8edf2);
-                    padding: 12px 0;
-                    background: var(--hz-card-bg, #fafbfc);
-                }
-                .mega-root-item {
-                    display: flex; align-items: center; gap: 8px;
-                    padding: 10px 16px; font-size: 0.88rem; font-weight: 600;
-                    color: var(--hz-text, #333); cursor: pointer;
-                    transition: background 0.15s, color 0.15s;
-                    position: relative;
-                }
-                .mega-root-item:hover, .mega-root-item.active {
-                    background: var(--hz-accent-bg, rgba(0,113,206,0.06));
-                    color: var(--hz-accent, #0071ce);
-                }
-                .mega-root-item a { color: inherit; text-decoration: none; flex: 1; }
-                .mega-arrow { margin-right: auto; font-size: 0.75rem; opacity: 0.5; }
-                .mega-col-subs {
-                    flex: 1; padding: 20px 24px;
-                }
-                .mega-sub-title {
-                    font-size: 1rem; font-weight: 700;
-                    color: var(--hz-accent, #0071ce);
-                    margin-bottom: 16px; padding-bottom: 8px;
-                    border-bottom: 2px solid var(--hz-accent, #0071ce);
-                }
-                .mega-sub-grid {
-                    display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-                    gap: 16px;
-                }
-                .mega-sub-group { display: flex; flex-direction: column; gap: 4px; }
-                .mega-sub-head {
-                    font-weight: 700; font-size: 0.85rem;
-                    color: var(--hz-text, #333); text-decoration: none;
-                    padding: 4px 0; transition: color 0.15s;
-                }
-                .mega-sub-head:hover { color: var(--hz-accent, #0071ce); }
-                .mega-sub-leaf {
-                    font-size: 0.8rem; color: var(--hz-text-muted, #888);
-                    text-decoration: none; padding: 2px 0;
-                    transition: color 0.15s;
-                }
-                .mega-sub-leaf:hover { color: var(--hz-accent, #0071ce); }
-                @media (max-width: 768px) {
-                    .mega-menu-wrap { display: none; }
-                }
-            `}</style>
         </div>
     );
 }

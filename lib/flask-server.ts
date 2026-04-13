@@ -14,15 +14,22 @@ export async function flaskServerJson<T>(path: string, init: RequestInit = {}): 
         headers.set("Cookie", cookieHeader);
     }
 
-    const response = await fetch(`${BACKEND_BASE}${path}`, {
-        ...init,
-        headers,
-        cache: "no-store",
-    });
+    try {
+        const response = await fetch(`${BACKEND_BASE}${path}`, {
+            ...init,
+            headers,
+            // Allow callers to pass { next: { revalidate: N } } for public/cacheable data.
+            // Defaults to no-store for private/user-specific data.
+            cache: init.cache ?? "no-store",
+        });
 
-    if (!response.ok) {
+        if (!response.ok) {
+            return null;
+        }
+
+        return (await response.json()) as T;
+    } catch (error) {
+        console.error('Flask Server Unreachable:', error);
         return null;
     }
-
-    return (await response.json()) as T;
 }
