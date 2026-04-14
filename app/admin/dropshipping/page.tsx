@@ -4,7 +4,6 @@
 // Converted from: templates/admin/dropshipping.html
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 
 interface DropItem {
   id: number; title: string; price: string; image: string; source_url: string;
@@ -12,15 +11,20 @@ interface DropItem {
 }
 
 export default function AdminDropshippingPage() {
-  const router = useRouter();
   const [items, setItems] = useState<DropItem[]>([]);
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [importingId, setImportingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [importMsg, setImportMsg] = useState<{ id: number; ok: boolean; text: string } | null>(null);
 
-  useEffect(() => {
-    fetch("/api/flask/admin/api/dropshipping", { credentials: "include" }).then((r) => r.json()).then((d) => setItems(d?.items ?? [])).catch(() => { });
-  }, []);
+  async function loadItems() {
+    const d = await fetch("/api/flask/admin/api/dropshipping", { credentials: "include" }).then(r => r.json()).catch(() => ({}));
+    setItems(d?.items ?? []);
+  }
+
+  useEffect(() => { loadItems(); }, []);
 
   const imported = items.filter((i) => i.status === "imported").length;
   const pending = items.filter((i) => i.status === "pending").length;
@@ -40,27 +44,45 @@ export default function AdminDropshippingPage() {
         setError(data.message || "فشل الجلب");
       } else {
         setUrl("");
+        await loadItems();
       }
-      // Reload items from API after scrape
-      const d = await fetch("/api/flask/admin/api/dropshipping", { credentials: "include" }).then(r => r.json());
-      setItems(d?.items ?? []);
     } catch {
       setError("تعذر جلب البيانات من هذا الرابط");
     } finally { setLoading(false); }
   }
 
   async function handleImport(id: number) {
-    const res = await fetch(`/api/flask/admin/dropshipping/${id}/import`, { method: "POST", credentials: "include" });
-    if (res.ok) {
-      setItems((prev) => prev.map((i) => i.id === id ? { ...i, status: "imported" } : i));
+    if (importingId !== null) return; // prevent concurrent imports
+    setImportingId(id);
+    setImportMsg(null);
+    try {
+      const res = await fetch(`/api/flask/admin/dropshipping/${id}/import`, { method: "POST", credentials: "include" });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setItems((prev) => prev.map((i) => i.id === id ? { ...i, status: "imported" } : i));
+        setImportMsg({ id, ok: true, text: "تم الاستيراد بنجاح ✓" });
+      } else {
+        setImportMsg({ id, ok: false, text: data.message || "فشل الاستيراد" });
+      }
+    } catch {
+      setImportMsg({ id, ok: false, text: "تعذر الاتصال بالسيرفر" });
+    } finally {
+      setImportingId(null);
+      setTimeout(() => setImportMsg(null), 3000);
     }
   }
 
   async function handleDelete(id: number) {
     if (!confirm("هل أنت متأكد من حذف هذا المنتج؟")) return;
-    const res = await fetch(`/api/flask/admin/dropshipping/${id}`, { method: "DELETE", credentials: "include" });
-    if (res.ok) {
-      setItems((prev) => prev.filter((i) => i.id !== id));
+    if (deletingId !== null) return;
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/flask/admin/dropshipping/${id}`, { method: "DELETE", credentials: "include" });
+      if (res.ok) {
+        setItems((prev) => prev.filter((i) => i.id !== id));
+      }
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -133,11 +155,27 @@ export default function AdminDropshippingPage() {
                   <span className={`px-3 py-1 rounded-full text-xs font-bold ${item.status === "imported" ? "bg-green-600 text-gray-800" : "bg-yellow-600/30 text-yellow-400"}`}>
                     {item.status === "imported" ? "تم الاستيراد" : "قيد الانتظار"}
                   </span>
-                  {item.status !== "imported" && (
-                    <button onClick={() => handleImport(item.id)} className="btn-accent px-3 py-1.5 rounded-lg text-xs">استيراد</button>
+                  {importMsg?.id === item.id && (
+                    <span className={`text-xs font-medium ${importMsg.ok ? "text-green-600" : "text-red-500"}`}>{importMsg.text}</span>
                   )}
-                  <button onClick={() => handleDelete(item.id)} className="px-3 py-1.5 rounded-lg text-xs transition-colors" style={{ background: "rgba(239,68,68,0.1)", color: "#f87171" }}>
-                    <i className="bx bx-trash" />
+                  {item.status !== "imported" && (
+                    <button
+                      onClick={() => handleImport(item.id)}
+                      disabled={importingId !== null}
+                      className="btn-accent px-3 py-1.5 rounded-lg text-xs disabled:opacity-60 flex items-center gap-1"
+                    >
+                      {importingId === item.id
+                        ? <><i className="bx bx-loader-alt animate-spin" /> جاري...</>
+                        : "استيراد"}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleDelete(item.id)}
+                    disabled={deletingId === item.id}
+                    className="px-3 py-1.5 rounded-lg text-xs transition-colors disabled:opacity-60"
+                    style={{ background: "rgba(239,68,68,0.1)", color: "#f87171" }}
+                  >
+                    {deletingId === item.id ? <i className="bx bx-loader-alt animate-spin" /> : <i className="bx bx-trash" />}
                   </button>
                 </div>
               </div>
