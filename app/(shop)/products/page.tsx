@@ -550,7 +550,7 @@ export default async function ProductsIndexPage({ searchParams }: { searchParams
                                 </div>
                             ) : (
                                 products.map((product) => (
-                                    <div key={product.id} className="col-sm-6 col-xl-4 product-col">
+                                    <div key={product.id} className="col-6 col-xl-4 product-col">
                                         <ProductCardItem product={product} />
                                     </div>
                                 ))
