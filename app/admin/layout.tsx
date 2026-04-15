@@ -176,6 +176,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: "/admin/banners", icon: "bx-image-alt", label: "البانرات" },
     { href: "/admin/flash-deals", icon: "bx-bolt-circle", label: "العروض السريعة" },
     { href: "/admin/homepage-sections", icon: "bx-layout", label: "الصفحة الرئيسية" },
+    { href: "/admin/homepage-cms/why-shop", icon: "bx-badge-check", label: "مزايا التسوق" },
+    { href: "/admin/homepage-cms/trust-badges", icon: "bx-shield-quarter", label: "شارات الدفع" },
+    { href: "/admin/homepage-cms/promo-banners", icon: "bx-image", label: "بانرات ترويجية" },
+    { href: "/admin/homepage-cms/newsletter", icon: "bx-mail-send", label: "النشرة (إعدادات)" },
     { href: "/admin/bundles", icon: "bx-box", label: "الباقات" },
     { href: "/admin/showcase", icon: "bx-collection", label: "المجموعات" },
     {

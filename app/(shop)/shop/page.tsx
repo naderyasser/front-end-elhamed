@@ -1,7 +1,13 @@
-import Link from "next/link";
 import { flaskServerJson } from "@/lib/flask-server";
-import { WishlistIconButton } from "@/components/shop/wishlist-icon-button";
-import { formatMoneyEGP, formatStoreImage } from "@/lib/store-utils";
+import { HeroCarousel } from "@/components/home/HeroCarousel";
+import { CategoriesStrip } from "@/components/home/CategoriesStrip";
+import { FlashDeals } from "@/components/home/FlashDeals";
+import { PromoBanner } from "@/components/home/PromoBanner";
+import { FeaturedProducts } from "@/components/home/FeaturedProducts";
+import { WhyShopWithUs } from "@/components/home/WhyShopWithUs";
+import { TabbedProducts } from "@/components/home/TabbedProducts";
+import { NewsletterBanner } from "@/components/home/NewsletterBanner";
+import { TrustBar } from "@/components/home/TrustBar";
 
 type ApiProduct = {
     id: number;
@@ -10,13 +16,11 @@ type ApiProduct = {
     price: number;
     discount: number;
     final_price: number;
+    brand: string;
     category: string;
+    stock: number;
 };
-
-type ProductsResponse = {
-    products: ApiProduct[];
-};
-
+type ProductsResponse = { products: ApiProduct[] };
 type CategoryNode = {
     id: number;
     name: string;
@@ -24,11 +28,7 @@ type CategoryNode = {
     image: string | null;
     children?: CategoryNode[];
 };
-
-type CategoryTreeResponse = {
-    tree: CategoryNode[];
-};
-
+type CategoryTreeResponse = { tree: CategoryNode[] };
 type BannerSlide = {
     id: number;
     image_url: string;
@@ -36,12 +36,39 @@ type BannerSlide = {
     subtitle: string;
     description: string;
     link_url: string;
-    is_active: boolean;
 };
-
-type BannersResponse = {
-    banners: BannerSlide[];
+type BannersResponse = { banners: BannerSlide[] };
+type FlashDeal = {
+    id: number;
+    product_id: number;
+    name: string;
+    image: string;
+    deal_price: number;
+    original_price: number;
+    discount_percent: number;
+    percent_claimed: number;
+    stock_total: number;
+    stock_sold: number;
+    ends_at: string | null;
 };
+type FlashDealsResponse = { deals: FlashDeal[] };
+type WhyShopItemData = { id: number; title: string; description: string; icon: string };
+type WhyShopResponse = { items: WhyShopItemData[] };
+type TrustBadgeData = { id: number; name: string; image_url: string };
+type TrustBadgesResponse = { badges: TrustBadgeData[] };
+type PromoBannerData = {
+    id: number;
+    title: string;
+    subtitle: string;
+    image_url: string;
+    cta_text: string;
+    cta_link: string;
+    background_color: string | null;
+    position: string;
+};
+type PromoBannersResponse = { banners: PromoBannerData[] };
+type NewsletterConfigData = { title: string; subtitle: string; button_text: string; background_image: string | null };
+type NewsletterConfigResponse = { config: NewsletterConfigData | null };
 
 function flattenCategories(tree: CategoryNode[]): CategoryNode[] {
     const result: CategoryNode[] = [];
@@ -54,207 +81,69 @@ function flattenCategories(tree: CategoryNode[]): CategoryNode[] {
 }
 
 export default async function ShopHomePage() {
-    const [productsData, categoryTree, bannersData] = await Promise.all([
+    const [
+        productsData,
+        categoryTree,
+        bannersData,
+        flashDealsData,
+        whyShopData,
+        trustBadgesData,
+        promoBannersData,
+        newsletterData,
+    ] = await Promise.all([
         flaskServerJson<ProductsResponse>("/api/shop/products?per_page=12&sort=default", { next: { revalidate: 60 } } as RequestInit),
         flaskServerJson<CategoryTreeResponse>("/api/categories/tree", { next: { revalidate: 300 } } as RequestInit),
-        flaskServerJson<BannersResponse>("/api/frontend/banners", { next: { revalidate: 300 } } as RequestInit),
+        flaskServerJson<BannersResponse>("/api/frontend/banners", { next: { revalidate: 120 } } as RequestInit),
+        flaskServerJson<FlashDealsResponse>("/api/frontend/flash-deals", { next: { revalidate: 30 } } as RequestInit),
+        flaskServerJson<WhyShopResponse>("/api/frontend/why-shop", { next: { revalidate: 600 } } as RequestInit),
+        flaskServerJson<TrustBadgesResponse>("/api/frontend/trust-badges", { next: { revalidate: 600 } } as RequestInit),
+        flaskServerJson<PromoBannersResponse>("/api/frontend/promo-banners", { next: { revalidate: 300 } } as RequestInit),
+        flaskServerJson<NewsletterConfigResponse>("/api/frontend/newsletter-config", { next: { revalidate: 600 } } as RequestInit),
     ]);
 
     const allProducts = productsData?.products || [];
-    const flashProducts = allProducts.slice(0, 4);
-    const topProducts = allProducts.slice(4, 8).length ? allProducts.slice(4, 8) : allProducts.slice(0, 4);
-    const categories = flattenCategories(categoryTree?.tree || []).slice(0, 8);
+    const categories = flattenCategories(categoryTree?.tree || []).slice(0, 12);
     const banners = bannersData?.banners || [];
-    const heroBanner = banners[0] || null;
+    const flashDeals = flashDealsData?.deals || [];
+    const whyShopItems = whyShopData?.items || [];
+    const trustBadges = trustBadgesData?.badges || [];
+    const promoBanners = promoBannersData?.banners || [];
+    const newsletterConfig = newsletterData?.config || null;
+
+    const midPageBanner = promoBanners.find((b) => b.position === "mid_page") || promoBanners[0] || null;
 
     return (
-        <main className="pb-4" dir="rtl">
-            <div className="container-fluid px-3 px-lg-4 mt-3">
-
-            </div>
-
-            <section className="hero-section hp-hero">
+        <main className="hp-main" dir="rtl">
+            {/* 1. Hero Carousel */}
+            <section className="hp-hero-section">
                 <div className="container-fluid px-3 px-lg-4">
-                    <div className="hero-slide position-relative overflow-hidden" style={{ borderRadius: 22 }}>
-                        <div className="hero-bg">
-                            <img
-                                src={heroBanner?.image_url || "/static/images/banner-image2.jpg"}
-                                alt={heroBanner?.title || "Hero"}
-                            />
-                        </div>
-                        <div className="container">
-                            <div className="row">
-                                <div className="col-lg-7">
-                                    <div className="hero-content">
-                                        {heroBanner?.subtitle && (
-                                            <p className="hero-subtitle">{heroBanner.subtitle}</p>
-                                        )}
-                                        <h1 className="hero-title">
-                                            {heroBanner?.title || "متجر الحمد للاجهزة الكهربائية"}
-                                        </h1>
-                                        {heroBanner?.description && (
-                                            <p className="hero-description">{heroBanner.description}</p>
-                                        )}
-                                        <div className="hero-buttons d-flex gap-2 flex-wrap">
-                                            <Link href={heroBanner?.link_url || "/shop/products"} className="btn-shop btn-primary">
-                                                تسوق الآن <i className="bx bx-left-arrow-alt" />
-                                            </Link>
-                                            <Link href="/shop/about" className="btn-shop btn-outline">
-                                                اعرف أكثر
-                                            </Link>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    <HeroCarousel banners={banners} />
                 </div>
             </section>
 
-            <section className="hp-categories-strip" dir="rtl">
-                <div className="container-fluid px-3 px-lg-4">
-                    <div className="hp-cat-scroll">
-                        {categories.map((cat) => (
-                            <Link key={cat.id} href={`/shop/products?category=${encodeURIComponent(cat.name)}`} className="hp-cat-item">
-                                {cat.image ? (
-                                    <div className="hp-cat-icon">
-                                        <img
-                                            src={formatStoreImage(cat.image)}
-                                            alt={cat.name}
-                                            loading="lazy"
-                                        />
-                                    </div>
-                                ) : (
-                                    <div className="hp-cat-icon">
-                                        <i className={`bx ${cat.icon ? `bx-${cat.icon}` : "bx-category"}`} />
-                                    </div>
-                                )}
-                                <span className="hp-cat-name">{cat.name}</span>
-                            </Link>
-                        ))}
-                        <Link href="/shop/products" className="hp-cat-item">
-                            <div className="hp-cat-icon">
-                                <i className="bx bx-grid-alt" />
-                            </div>
-                            <span className="hp-cat-name">عرض الكل</span>
-                        </Link>
-                    </div>
-                </div>
-            </section>
+            {/* 2. Categories Strip */}
+            <CategoriesStrip categories={categories} />
 
-            <section className="hp-trust-strip" dir="rtl">
-                <div className="container-fluid px-3 px-lg-4">
-                    <div className="hp-trust-grid">
-                        <div className="hp-trust-item">
-                            <div className="hp-trust-icon">
-                                <i className="bx bxs-truck" />
-                            </div>
-                            <div>
-                                <div className="hp-trust-text">شحن سريع</div>
-                                <div className="hp-trust-sub">لجميع أنحاء مصر</div>
-                            </div>
-                        </div>
-                        <div className="hp-trust-item">
-                            <div className="hp-trust-icon">
-                                <i className="bx bxs-shield-plus" />
-                            </div>
-                            <div>
-                                <div className="hp-trust-text">ضمان الجودة</div>
-                                <div className="hp-trust-sub">منتجات أصلية 100%</div>
-                            </div>
-                        </div>
-                        <div className="hp-trust-item">
-                            <div className="hp-trust-icon">
-                                <i className="bx bx-support" />
-                            </div>
-                            <div>
-                                <div className="hp-trust-text">دعم فني مباشر</div>
-                                <div className="hp-trust-sub">طوال أيام الأسبوع</div>
-                            </div>
-                        </div>
-                        <div className="hp-trust-item">
-                            <div className="hp-trust-icon">
-                                <i className="bx bxs-lock-alt" />
-                            </div>
-                            <div>
-                                <div className="hp-trust-text">دفع آمن</div>
-                                <div className="hp-trust-sub">بطاقات وكاش</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
+            {/* 3. Flash Deals */}
+            {flashDeals.length > 0 && <FlashDeals deals={flashDeals} />}
 
-            <section className="hp-flash-section" dir="rtl">
-                <div className="container-fluid px-3 px-lg-4">
-                    <div className="hp-flash-header">
-                        <h2 className="hp-flash-title">
-                            <i className="bx bxs-zap" /> عروض خاطفة
-                        </h2>
-                        <Link href="/shop/products?sort=discount" className="hp-flash-viewall">
-                            عرض الكل <i className="bx bx-left-arrow-alt" />
-                        </Link>
-                    </div>
+            {/* 4. Mid-page Promo Banner */}
+            {midPageBanner && <PromoBanner banner={midPageBanner} />}
 
-                    <div className="row g-3">
-                        {flashProducts.map((product) => (
-                            <div key={product.id} className="col-sm-6 col-lg-3">
-                                <Link href={`/shop/products/${product.id}`} className="hp-flash-card d-block h-100">
-                                    <div className="hp-flash-img-wrap">
-                                        <img src={formatStoreImage(product.image)} alt={product.name} />
-                                        {product.discount > 0 ? (
-                                            <span className="hp-flash-discount-badge">-{product.discount}%</span>
-                                        ) : null}
-                                    </div>
-                                    <div className="hp-flash-info">
-                                        <div className="hp-flash-name">{product.name}</div>
-                                        <div className="hp-flash-prices">
-                                            <span className="hp-flash-deal-price">{formatMoneyEGP(product.final_price)}</span>
-                                            {product.discount > 0 ? (
-                                                <span className="hp-flash-original-price">{formatMoneyEGP(product.price)}</span>
-                                            ) : null}
-                                        </div>
-                                    </div>
-                                </Link>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </section>
+            {/* 5. Featured Products */}
+            <FeaturedProducts products={allProducts.slice(0, 8)} />
 
-            <section className="py-4" dir="rtl">
-                <div className="container-fluid px-3 px-lg-4">
-                    <div className="d-flex justify-content-between align-items-center mb-3">
-                        <h2 style={{ fontWeight: 800, margin: 0 }}>منتجات مميزة</h2>
-                        <Link href="/shop/products" className="hp-flash-viewall">
-                            تصفح المتجر <i className="bx bx-left-arrow-alt" />
-                        </Link>
-                    </div>
-                    <div className="row g-3">
-                        {topProducts.map((product) => (
-                            <div key={product.id} className="col-sm-6 col-lg-3">
-                                <article className="product-card-modern h-100">
-                                    {product.discount > 0 ? <span className="product-badge-modern">-{product.discount}%</span> : null}
-                                    <WishlistIconButton productId={product.id} />
-                                    <Link href={`/shop/products/${product.id}`} className="product-img-wrapper">
-                                        <img src={formatStoreImage(product.image)} alt={product.name} />
-                                    </Link>
-                                    <div className="product-info-modern">
-                                        <div className="product-cat">{product.category}</div>
-                                        <h3 className="product-title-modern">
-                                            <Link href={`/shop/products/${product.id}`}>{product.name}</Link>
-                                        </h3>
-                                        <div className="price-wrapper">
-                                            <span className="current-price">{formatMoneyEGP(product.final_price)}</span>
-                                            {product.discount > 0 ? <span className="old-price">{formatMoneyEGP(product.price)}</span> : null}
-                                        </div>
-                                    </div>
-                                </article>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </section>
+            {/* 6. Why Shop With Us */}
+            <WhyShopWithUs items={whyShopItems} />
+
+            {/* 7. Tabbed Products */}
+            {allProducts.length > 0 && <TabbedProducts products={allProducts} />}
+
+            {/* 8. Newsletter */}
+            <NewsletterBanner config={newsletterConfig} />
+
+            {/* 9. Trust Bar */}
+            <TrustBar badges={trustBadges} />
         </main>
     );
 }
