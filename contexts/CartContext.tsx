@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, useRef, ReactNode } from "react";
+import { createContext, useContext, useCallback, useEffect, useState, useRef, ReactNode } from "react";
 
 export type CartItem = {
     id: number;
@@ -8,15 +8,11 @@ export type CartItem = {
     max_quantity?: number;
     line_total?: number;
     unit_price?: number;
-    variant_id?: number | null;
-    variant_label?: string | null;
     product: {
         id: number;
         name: string;
         image: string;
-        url?: string;
         price?: number;
-        discount?: number;
         final_price?: number;
     };
 };
@@ -75,7 +71,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }, [cart, isMounted]);
 
     // Fetch cart from API and sync with localStorage
-    const refreshCart = async () => {
+    const refreshCart = useCallback(async () => {
         try {
             const response = await fetch("/api/flask/api/frontend/cart", { cache: "no-store" });
             if (!response.ok) {
@@ -87,7 +83,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         } catch (error) {
             console.error("Failed to refresh cart:", error);
         }
-    };
+    }, []);
 
     // Add item to cart
     const addToCart = async (productId: number, quantity: number = 1) => {
