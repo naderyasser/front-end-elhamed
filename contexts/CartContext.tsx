@@ -43,8 +43,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
     // H-02: Serialize cart mutations to prevent race conditions
     const opQueueRef = useRef<Promise<void>>(Promise.resolve());
     const enqueue = (op: () => Promise<void>): Promise<void> => {
-        opQueueRef.current = opQueueRef.current.then(() => op()).catch(() => { });
-        return opQueueRef.current;
+        // Keep the queue alive even when op() throws, but propagate the error to the caller.
+        const result = opQueueRef.current.then(() => op());
+        opQueueRef.current = result.catch(() => { });
+        return result;
     };
 
     // Initialize cart from localStorage on mount (to avoid hydration errors)
