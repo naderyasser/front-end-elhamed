@@ -3,6 +3,7 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
+import { useCart } from "@/contexts/CartContext";
 
 // Dynamic imports with SSR disabled to prevent hydration errors
 const FooterLogo = dynamic(() => import("../FooterLogo"), { ssr: false });
@@ -258,6 +259,8 @@ export function ShopShell({ children }: ShopShellProps) {
     const [catTree, setCatTree] = useState<CatNode[]>([]);
     const [megaOpen, setMegaOpen] = useState(false);
     const [activeMega, setActiveMega] = useState<CatNode | null>(null);
+    const { cart, isMounted: cartMounted } = useCart();
+    const cartCount = cartMounted && cart ? cart.items_count : 0;
     const megaTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [isAuthed, setIsAuthed] = useState(false);
 
@@ -374,8 +377,12 @@ export function ShopShell({ children }: ShopShellProps) {
                 <div className="container-fluid px-3 px-lg-4">
                     <div className="top-info-links">
                         <div className="d-flex align-items-center gap-3">
-                            <a href="tel:+201050188516">
-                                <i className="bx bx-phone" /> اتصل بنا
+                            <a href="tel:+201050188516" style={{ fontWeight: 700, fontSize: "0.95rem", letterSpacing: "0.03em" }}>
+                                <i className="bx bx-phone" /> 01050188516
+                            </a>
+                            <span>|</span>
+                            <a href="https://wa.me/201050188516" target="_blank" rel="noreferrer" style={{ color: "#25D366", fontWeight: 600 }}>
+                                <i className="bx bxl-whatsapp" /> واتساب
                             </a>
                             <span>|</span>
                             <Link href="/shop/orders">تتبع طلبك</Link>
@@ -384,6 +391,8 @@ export function ShopShell({ children }: ShopShellProps) {
                             <span>
                                 <i className="bx bxs-truck" /> شحن سريع لجميع أنحاء مصر
                             </span>
+                            <span>|</span>
+                            <Link href="/shop/how-to-order">كيف تطلب؟</Link>
                             <span>|</span>
                             <Link href="/shop/about">من نحن</Link>
                         </div>
@@ -409,6 +418,9 @@ export function ShopShell({ children }: ShopShellProps) {
                         >
                             الأقسام <i className="bx bx-chevron-down" style={{ fontSize: 12, marginRight: 2 }} />
                         </div>
+                        <Link href="/shop/how-to-order" className="alha-nav-link" style={{ color: "#25D366", fontWeight: 700 }}>
+                            <i className="bx bxl-whatsapp" /> كيف تطلب؟
+                        </Link>
                         <Link href="/shop/about" className="alha-nav-link">من نحن</Link>
                     </nav>
 
@@ -443,6 +455,7 @@ export function ShopShell({ children }: ShopShellProps) {
                         </Link>
                         <Link href="/shop/cart" className="alha-action-btn alha-cart-action" aria-label="السلة">
                             <i className="bx bx-cart" />
+                            {cartCount > 0 && <span className="alha-cart-badge">{cartCount}</span>}
                         </Link>
 
                         {/* Desktop user menu */}
@@ -585,98 +598,36 @@ export function ShopShell({ children }: ShopShellProps) {
                 <i className="bx bxl-facebook" style={{ fontSize: 24 }} />
             </a>
 
-            <footer id="footer" className="padding-large footer-premium">
+            <footer id="footer" className="footer-v2" dir="rtl">
                 <div className="container">
-                    <div className="row">
-                        <div className="col-lg-3 col-sm-6 pb-3">
-                            <div className="footer-logo-section">
-                                <FooterLogo />
-                            </div>
-                        </div>
-
-                        <div className="col-lg-2 col-sm-6 pb-3">
-                            <h5 className="footer-title">الأقسام</h5>
-                            <ul className="footer-links">
-                                {categories.slice(0, 4).map((category) => (
-                                    <li key={category}>
-                                        <Link href={`/shop/products?category=${encodeURIComponent(category)}`}>{category}</Link>
-                                    </li>
-                                ))}
-                                <li>
-                                    <Link href="/shop/products">عرض الكل</Link>
-                                </li>
-                            </ul>
-                        </div>
-
-                        <div className="col-lg-2 col-sm-6 pb-3">
-                            <h5 className="footer-title">روابط سريعة</h5>
-                            <ul className="footer-links">
-                                <li>
-                                    <Link href="/shop">الرئيسية</Link>
-                                </li>
-                                <li>
-                                    <Link href="/shop/about">من نحن</Link>
-                                </li>
-                                <li>
-                                    <Link href="/shop/products">منتجاتنا</Link>
-                                </li>
-                                <li>
-                                    <Link href="/shop/cart">سلة التسوق</Link>
-                                </li>
-                                <li>
-                                    <Link href="/shop/contact">تواصل معنا</Link>
-                                </li>
-                                <li>
-                                    <Link href="/shop/faq">الأسئلة الشائعة</Link>
-                                </li>
-                            </ul>
-                        </div>
-
-                        <div className="col-lg-2 col-sm-6 pb-3">
-                            <h5 className="footer-title">خدمة العملاء</h5>
-                            <ul className="footer-links">
-                                <li>
-                                    <Link href="/shop/faq">الأسئلة الشائعة</Link>
-                                </li>
-                                <li>
-                                    <Link href="/shop/orders">تتبع الطلبات</Link>
-                                </li>
-                                <li>
-                                    <Link href="/shop/account">حسابي</Link>
-                                </li>
-                            </ul>
-                        </div>
-
-                        <div className="col-lg-3 col-sm-6">
-                            <h5 className="footer-title">تواصل معنا</h5>
-                            <div className="footer-contact-info">
-                                <div className="footer-contact-item">
-                                    <i className="bx bx-phone footer-contact-icon" />
-                                    <a href="tel:+201050188516" className="footer-contact-link">
-                                        +20 105 018 8516
-                                    </a>
-                                </div>
-                                <div className="footer-contact-item">
-                                    <i className="bx bx-map footer-contact-icon" />
-                                    <span className="footer-contact-text">مصر</span>
-                                </div>
-                            </div>
+                    <div className="footer-v2-top">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src="/static/images/logo-alha.jpeg" alt="الحمد" className="footer-v2-logo" />
+                        <nav className="footer-v2-nav">
+                            <Link href="/shop">الرئيسية</Link>
+                            <Link href="/shop/products">المنتجات</Link>
+                            <Link href="/shop/about">من نحن</Link>
+                            <Link href="/shop/track-order">تتبع طلبك</Link>
+                            <Link href="/shop/how-to-order">كيف تطلب؟</Link>
+                            <Link href="/shop/cart">السلة</Link>
+                            <Link href="/shop/faq">الأسئلة الشائعة</Link>
+                            <Link href="/shop/contact">تواصل معنا</Link>
+                        </nav>
+                        <div className="footer-v2-social">
+                            <a href="https://wa.me/201050188516" target="_blank" rel="noreferrer" className="footer-v2-soc" aria-label="واتساب">
+                                <i className="bx bxl-whatsapp" />
+                            </a>
+                            <a href="https://www.facebook.com/share/1HBiHzhNp9/" target="_blank" rel="noreferrer" className="footer-v2-soc" aria-label="فيسبوك">
+                                <i className="bx bxl-facebook" />
+                            </a>
+                            <a href="tel:+201050188516" className="footer-v2-soc" aria-label="اتصل بنا">
+                                <i className="bx bx-phone" />
+                            </a>
                         </div>
                     </div>
-
-                    <div className="footer-bottom">
-                        <div className="row align-items-center">
-                            <div className="col-md-6 text-center text-md-end">
-                                <p className="footer-copyright mb-0">
-                                    <i className="bx bx-copyright" /> 2026 الحمد - جميع الحقوق محفوظة
-                                </p>
-                            </div>
-                            <div className="col-md-6 text-center text-md-start">
-                                <div className="footer-payment-methods">
-                                    <span className="footer-cash-badge">الدفع عند الاستلام</span>
-                                </div>
-                            </div>
-                        </div>
+                    <div className="footer-v2-bottom">
+                        <span className="footer-v2-copy">© 2026 الحمد — جميع الحقوق محفوظة</span>
+                        <span className="footer-v2-badge">الدفع عند الاستلام</span>
                     </div>
                 </div>
             </footer>
@@ -691,7 +642,10 @@ export function ShopShell({ children }: ShopShellProps) {
                     <span>المتجر</span>
                 </Link>
                 <Link href="/shop/cart" className="nav-item">
-                    <i className="bx bx-cart" />
+                    <span className="mobile-nav-icon-wrap">
+                        <i className="bx bx-cart" />
+                        {cartCount > 0 && <span className="alha-cart-badge">{cartCount}</span>}
+                    </span>
                     <span>السلة</span>
                 </Link>
                 <Link href="/shop/about" className="nav-item">
@@ -719,6 +673,12 @@ export function ShopShell({ children }: ShopShellProps) {
                     </Link>
                     <Link href="/shop/products" className="mobile-nav-item" onClick={() => setMobileOpen(false)}>
                         <i className="bx bx-store" /> المتجر
+                    </Link>
+                    <Link href="/shop/track-order" className="mobile-nav-item" onClick={() => setMobileOpen(false)}>
+                        <i className="bx bxs-truck" /> تتبع طلبك
+                    </Link>
+                    <Link href="/shop/how-to-order" className="mobile-nav-item" onClick={() => setMobileOpen(false)} style={{ color: "#25D366", fontWeight: 700 }}>
+                        <i className="bx bxl-whatsapp" /> كيف تطلب؟
                     </Link>
                     <Link href="/shop/about" className="mobile-nav-item" onClick={() => setMobileOpen(false)}>
                         <i className="bx bx-info-circle" /> من نحن

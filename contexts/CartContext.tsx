@@ -8,11 +8,15 @@ export type CartItem = {
     max_quantity?: number;
     line_total?: number;
     unit_price?: number;
+    variant_id?: number | null;
+    variant_label?: string | null;
     product: {
         id: number;
         name: string;
         image: string;
+        url?: string;
         price?: number;
+        discount?: number;
         final_price?: number;
     };
 };
